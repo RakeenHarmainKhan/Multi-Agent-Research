@@ -39,6 +39,9 @@ class ResearchResponse(BaseModel):
     estimated_cost: Optional[float] = Field(
         None, description="USD; only set when LLM_*_COST_PER_1M_TOKENS are configured"
     )
+    guardrails: Dict[str, Any] = Field(
+        default_factory=dict, description="{blocked, reasons, redactions} from the input guardrails"
+    )
 
 
 class SystemStats(BaseModel):
@@ -46,6 +49,7 @@ class SystemStats(BaseModel):
     total_queries: int
     successful_queries: int
     failed_queries: int
+    blocked_queries: int
     avg_latency: float
     total_tokens: int
     avg_tokens_per_query: float

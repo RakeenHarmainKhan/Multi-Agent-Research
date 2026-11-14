@@ -90,6 +90,30 @@ describe('executeResearch', () => {
 
 });
 
+describe('guardrails', () => {
+  it('exposes the masked kinds from the latest response', async () => {
+    executeResearch.mockResolvedValueOnce({
+      ...RESPONSE,
+      guardrails: { blocked: false, reasons: [], redactions: ['email'] },
+    });
+    const { result } = renderHook(() => useResearch());
+    await act(() => result.current.executeResearch('mail a@b.com'));
+    expect(result.current.redactions).toEqual(['email']);
+  });
+
+  it('resets when the next answer masks nothing, and on clear', async () => {
+    executeResearch
+      .mockResolvedValueOnce({ ...RESPONSE, guardrails: { blocked: false, reasons: [], redactions: ['email'] } })
+      .mockResolvedValueOnce(RESPONSE); // older backends send no guardrails field
+    const { result } = renderHook(() => useResearch());
+    await act(() => result.current.executeResearch('mail a@b.com'));
+    await act(() => result.current.executeResearch('what is lora'));
+    expect(result.current.redactions).toEqual([]);
+    act(() => result.current.clearMessages());
+    expect(result.current.redactions).toEqual([]);
+  });
+});
+
 describe('regenerate', () => {
   it('re-asks the last question and replaces its answer', async () => {
     executeResearch

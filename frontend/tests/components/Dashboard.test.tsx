@@ -15,6 +15,7 @@ const STATS: SystemStats = {
   total_queries: 4,
   successful_queries: 3,
   failed_queries: 1,
+  blocked_queries: 2,
   avg_latency: 21.5,
   total_tokens: 12345,
   avg_tokens_per_query: 3086.3,
@@ -41,6 +42,11 @@ describe('Dashboard', () => {
     render(<Dashboard />);
     expect(await screen.findByText('12,345')).toBeInTheDocument();
     expect(screen.getByText('3,086 per query')).toBeInTheDocument();
+  });
+
+  it('shows how many queries were blocked by the guardrails', async () => {
+    render(<Dashboard />);
+    expect(await screen.findByText('1 failed · 2 blocked')).toBeInTheDocument();
   });
 
   it('does not show a cost card', async () => {

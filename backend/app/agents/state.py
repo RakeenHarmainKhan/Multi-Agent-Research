@@ -21,8 +21,12 @@ class ResearchState(TypedDict, total=False):
     thread_id: str
     mode: Literal["auto", "research"]
 
+    # Guardrails
+    guard_suspect: bool  # input rules want the LLM safety check to decide
+    guardrails: Dict[str, Any]  # {"blocked": bool, "reasons": [...], "redactions": [...]}
+
     # Classification outputs
-    intent: Literal["CHAT", "RESEARCH", "REJECTED"]
+    intent: Literal["CHAT", "RESEARCH", "REJECTED", "BLOCKED"]
     requires_academic: bool
     requires_web: bool
     

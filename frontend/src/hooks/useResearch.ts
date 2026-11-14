@@ -14,6 +14,8 @@ interface UseResearchReturn {
   error: string | null;
   currentThreadId: string | null;
   citations: Citation[];
+  /** Kinds of personal data masked in the latest question, e.g. ['email'] */
+  redactions: string[];
   executeResearch: (query: string, mode?: ResearchMode) => Promise<void>;
   /** Re-run the last question, replacing its answer. */
   regenerate: (mode?: ResearchMode) => Promise<void>;
@@ -26,6 +28,7 @@ export const useResearch = (): UseResearchReturn => {
   const [error, setError] = useState<string | null>(null);
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
   const [citations, setCitations] = useState<Citation[]>([]);
+  const [redactions, setRedactions] = useState<string[]>([]);
 
   const appendAssistant = useCallback((content: string) => {
     setMessages((prev) => [...prev, { role: 'assistant', content, timestamp: new Date() }]);
@@ -50,6 +53,7 @@ export const useResearch = (): UseResearchReturn => {
       // Store thread ID for conversation continuity
       setCurrentThreadId(response.thread_id);
       setCitations(response.citations || []);
+      setRedactions(response.guardrails?.redactions ?? []);
       appendAssistant(response.report || 'Research completed but no report generated.');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Research failed';
@@ -77,6 +81,7 @@ export const useResearch = (): UseResearchReturn => {
     setMessages([]);
     setCurrentThreadId(null);
     setCitations([]);
+    setRedactions([]);
     setError(null);
   }, []);
 
@@ -86,6 +91,7 @@ export const useResearch = (): UseResearchReturn => {
     error,
     currentThreadId,
     citations,
+    redactions,
     executeResearch,
     regenerate,
     clearMessages,

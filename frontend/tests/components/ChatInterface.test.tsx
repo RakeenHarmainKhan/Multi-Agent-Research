@@ -118,6 +118,54 @@ describe('sending', () => {
   });
 });
 
+describe('guardrails', () => {
+  it('tells the user what was masked before processing', async () => {
+    executeResearch.mockResolvedValueOnce({
+      ...RESPONSE,
+      guardrails: { blocked: false, reasons: [], redactions: ['email', 'phone'] },
+    });
+    render(<ChatInterface />);
+    await send('email me at ana@corp.com');
+    expect(await screen.findByText('Masked before processing: email, phone.')).toBeInTheDocument();
+  });
+
+  it('shows no notice when nothing was masked', async () => {
+    executeResearch.mockResolvedValueOnce({
+      ...RESPONSE,
+      guardrails: { blocked: false, reasons: [], redactions: [] },
+    });
+    render(<ChatInterface />);
+    await send('what is lora');
+    await screen.findByText(/LoRA adds low-rank updates/);
+    expect(screen.queryByText(/Masked before processing/)).not.toBeInTheDocument();
+  });
+
+  it('shows a blocked answer as a normal assistant message', async () => {
+    executeResearch.mockResolvedValueOnce({
+      ...RESPONSE,
+      status: 'blocked',
+      report: "I can't help with that request.",
+      citations: [],
+      guardrails: { blocked: true, reasons: ['unsafe'], redactions: [] },
+    });
+    render(<ChatInterface />);
+    await send('something harmful');
+    expect(await screen.findByText("I can't help with that request.")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Regenerate' })).toBeInTheDocument();
+  });
+
+  it('keeps the user their original text on screen', async () => {
+    executeResearch.mockResolvedValueOnce({
+      ...RESPONSE,
+      guardrails: { blocked: false, reasons: [], redactions: ['email'] },
+    });
+    render(<ChatInterface />);
+    await send('email me at ana@corp.com');
+    await screen.findByText(/Masked before processing/);
+    expect(screen.getByText('email me at ana@corp.com')).toBeInTheDocument();
+  });
+});
+
 describe('sources panel', () => {
   it('lists cited sources with titles, links and snippets', async () => {
     render(<ChatInterface />);

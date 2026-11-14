@@ -21,6 +21,7 @@ export const ChatInterface: React.FC = () => {
     regenerate,
     clearMessages,
     citations: currentCitations,
+    redactions,
   } = useResearch();
 
   // Auto-scroll to bottom on new messages
@@ -101,6 +102,12 @@ export const ChatInterface: React.FC = () => {
                           content={message.content}
                           citationIds={isLast ? currentCitations.map((c) => c.id) : []}
                         />
+
+                        {isLast && redactions.length > 0 && (
+                          <p className="mt-4 text-xs text-slate-500">
+                            Masked before processing: {redactions.join(', ')}.
+                          </p>
+                        )}
 
                         {/* Sources Expander */}
                         {isLast && currentCitations.length > 0 && (

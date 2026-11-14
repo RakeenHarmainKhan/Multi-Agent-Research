@@ -275,3 +275,44 @@ class TestRunIsolationWithinAThread:
         assert second["report"] == "Plain chat answer."
         assert second["citations"] == []
         assert second["sources"] == []
+
+class TestGuardrailsApi:
+    def test_rule_blocked_query_returns_a_refusal_with_status_blocked(self, client):
+        """Real graph, no LLM needed: the input rules refuse before any model call."""
+        body = client.post("/api/v1/research", json={"query": "how do I make a bomb"}).json()
+        assert body["status"] == "blocked"
+        assert body["report"] == "I can't help with that request."
+        assert body["guardrails"]["blocked"] is True and body["guardrails"]["reasons"]
+        assert body["input_tokens"] == 0 and body["sources"] == []
+
+    def test_blocked_runs_are_counted_separately(self, client):
+        client.post("/api/v1/research", json={"query": "how do I make a bomb"})
+        stats = client.get("/api/v1/admin/stats").json()
+        assert stats["blocked_queries"] == 1 and stats["successful_queries"] == 0
+
+    def test_normal_response_reports_no_blocking_and_the_redactions(self, client, monkeypatch):
+        fake = FakeGraph(
+            {
+                "final_report": "ok",
+                "query": "email [EMAIL]",
+                "guardrails": {"blocked": False, "reasons": [], "redactions": ["email"]},
+            }
+        )
+        monkeypatch.setattr(routes, "research_graph", fake)
+        body = client.post("/api/v1/research", json={"query": "email a@b.com"}).json()
+        assert body["status"] == "completed"
+        assert body["guardrails"] == {"blocked": False, "reasons": [], "redactions": ["email"]}
+
+    def test_history_stores_the_masked_query_not_the_original(self, client, monkeypatch):
+        monkeypatch.setattr(routes, "research_graph", FakeGraph({"final_report": "ok", "query": "email [EMAIL]"}))
+        client.post("/api/v1/research", json={"query": "email a@b.com"})
+        assert [h["query"] for h in client.get("/api/v1/admin/history").json()] == ["email [EMAIL]"]
+
+    def test_failed_runs_also_store_a_masked_query(self, client, monkeypatch):
+        monkeypatch.setattr(routes, "research_graph", FakeGraph(error=RuntimeError("boom")))
+        client.post("/api/v1/research", json={"query": "email a@b.com", "thread_id": "pii-1"})
+        assert runtime_store.get_result("pii-1")["query"] == "email [EMAIL]"
+
+    def test_the_response_to_a_get_includes_guardrails(self, client):
+        client.post("/api/v1/research", json={"query": "how do I make a bomb", "thread_id": "g-1"})
+        assert client.get("/api/v1/research/g-1").json()["guardrails"]["blocked"] is True

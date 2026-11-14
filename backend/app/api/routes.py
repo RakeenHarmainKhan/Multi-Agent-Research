@@ -12,6 +12,7 @@ from app.api.models import HealthCheck, ResearchRequest, ResearchResponse, Syste
 from app.core.config import settings
 from app.core.runtime_store import runtime_store
 from app.core.usage import TokenUsageHandler
+from app.guardrails import redact_pii
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -19,6 +20,8 @@ _PROCESS_START = time.time()
 
 _FRESH_RUN_STATE: Dict[str, Any] = {
     "intent": "",
+    "guard_suspect": False,
+    "guardrails": {"blocked": False, "reasons": [], "redactions": []},
     "requires_academic": False,
     "requires_web": True,
     "plan": [],
@@ -44,6 +47,7 @@ def _to_response(record: Dict[str, Any]) -> ResearchResponse:
         input_tokens=record.get("input_tokens", 0),
         output_tokens=record.get("output_tokens", 0),
         estimated_cost=record.get("estimated_cost"),
+        guardrails=record.get("guardrails", {}),
     )
 
 
@@ -75,11 +79,13 @@ async def execute_research(request: ResearchRequest):
         execution_time = time.time() - start_time
         usage = usage_handler.summary()
 
+        guardrails = final_state.get("guardrails", {})
         record = {
             "run_id": run_id,
             "thread_id": thread_id,
-            "query": request.query,
-            "status": "completed",
+            "query": final_state.get("query", request.query),  # PII already masked by the input guard
+            "status": "blocked" if guardrails.get("blocked") else "completed",
+            "guardrails": guardrails,
             "intent": final_state.get("intent", "UNKNOWN"),
             "final_report": final_state.get("final_report", ""),
             "sources": final_state.get("all_sources", []),
@@ -100,7 +106,7 @@ async def execute_research(request: ResearchRequest):
             {
                 "run_id": run_id,
                 "thread_id": thread_id,
-                "query": request.query,
+                "query": redact_pii(request.query)[0],
                 "status": "failed",
                 "intent": "UNKNOWN",
                 "final_report": "",

@@ -35,9 +35,16 @@ export interface ResearchRequest {
   messages?: Array<Pick<Message, 'role' | 'content'>>;
 }
 
+export interface Guardrails {
+  blocked: boolean;
+  reasons: string[];
+  /** Kinds of personal data masked before processing, e.g. ['email'] */
+  redactions: string[];
+}
+
 export interface ResearchResponse {
   thread_id: string;
-  status: 'processing' | 'completed' | 'failed';
+  status: 'processing' | 'completed' | 'failed' | 'blocked';
   report?: string;
   citations: Citation[];
   sources: Source[];
@@ -45,12 +52,14 @@ export interface ResearchResponse {
   input_tokens?: number;
   output_tokens?: number;
   estimated_cost?: number | null;
+  guardrails?: Guardrails;
 }
 
 export interface SystemStats {
   total_queries: number;
   successful_queries: number;
   failed_queries: number;
+  blocked_queries: number;
   avg_latency: number;
   total_tokens: number;
   avg_tokens_per_query: number;

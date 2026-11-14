@@ -3,11 +3,12 @@ import json
 import pytest
 
 from app.agents import nodes
+from app.guardrails import REFUSAL
 
 
-def _classifier_reply(intent="RESEARCH", academic=False, web=True):
+def _classifier_reply(intent="RESEARCH", academic=False, web=True, safety=None):
     return json.dumps(
-        {"intent": intent, "requires_academic": academic, "requires_web": web, "reasoning": "r"}
+        {"intent": intent, "requires_academic": academic, "requires_web": web, "safety": safety, "reasoning": "r"}
     )
 
 
@@ -93,6 +94,90 @@ class TestIntentClassifier:
             {"query": "and its cost?", "messages": [{"role": "user", "content": "about LoRA"}]}
         )
         assert "about LoRA" in prompt_text(fake_llm.prompts[0])
+
+
+class TestSafetyVerdict:
+    """The classifier's safety verdict, as used with the input rules' `guard_suspect` flag."""
+
+    @staticmethod
+    def _state(**extra):
+        return {"query": "q", "messages": [], **extra}
+
+    def test_suspect_query_judged_harmful_is_refused(self, fake_llm):
+        fake_llm.reply = _classifier_reply("CHAT", safety="harmful")
+        out = nodes.intent_classifier_node(self._state(guard_suspect=True))
+        assert out["intent"] == "BLOCKED" and out["final_report"] == REFUSAL
+        assert out["guardrails"]["blocked"] is True and out["current_step"] == "completed"
+
+    def test_refusal_keeps_the_pii_redactions(self, fake_llm):
+        fake_llm.reply = _classifier_reply("CHAT", safety="harmful")
+        guardrails = {"blocked": False, "reasons": [], "redactions": ["email"]}
+        out = nodes.intent_classifier_node(self._state(guard_suspect=True, guardrails=guardrails))
+        assert out["guardrails"]["redactions"] == ["email"]
+
+    def test_suspect_query_judged_safe_continues(self, fake_llm):
+        fake_llm.reply = _classifier_reply("CHAT", safety="safe")
+        out = nodes.intent_classifier_node(self._state(guard_suspect=True))
+        assert out["intent"] == "CHAT" and out["current_step"] == "chat"
+
+    def test_suspect_query_without_a_verdict_is_refused(self, fake_llm):
+        fake_llm.reply = _classifier_reply("CHAT")  # model forgot the safety field
+        out = nodes.intent_classifier_node(self._state(guard_suspect=True))
+        assert out["intent"] == "BLOCKED"
+
+    def test_suspect_query_is_refused_when_the_llm_check_fails(self, fake_llm):
+        fake_llm.reply = "not json"
+        out = nodes.intent_classifier_node(self._state(guard_suspect=True))
+        assert out["intent"] == "BLOCKED"
+
+    def test_harmful_verdict_on_an_unsuspected_query_is_refused(self, fake_llm):
+        fake_llm.reply = _classifier_reply("CHAT", safety="harmful")
+        out = nodes.intent_classifier_node(self._state())
+        assert out["intent"] == "BLOCKED"
+
+    def test_missing_verdict_on_an_unsuspected_query_is_allowed(self, fake_llm):
+        fake_llm.reply = _classifier_reply("RESEARCH")
+        out = nodes.intent_classifier_node(self._state())
+        assert out["intent"] == "RESEARCH"
+
+    def test_research_mode_with_suspect_query_asks_the_llm_then_researches(self, fake_llm):
+        fake_llm.reply = _classifier_reply("CHAT", safety="safe")
+        out = nodes.intent_classifier_node(self._state(mode="research", guard_suspect=True))
+        assert fake_llm.calls == 1
+        assert out["intent"] == "RESEARCH" and out["requires_academic"] is True
+
+    def test_prompt_teaches_the_safety_boundary_with_examples(self, fake_llm, prompt_text):
+        nodes.intent_classifier_node(self._state())
+        prompt = prompt_text(fake_llm.prompts[0])
+        assert "kill switch" in prompt and "kill him" in prompt
+
+
+class TestInputGuardNode:
+    def test_masks_pii_in_query_and_history(self):
+        state = {
+            "query": "write to ana@corp.com",
+            "messages": [{"role": "user", "content": "call 415-555-0132"}],
+        }
+        out = nodes.input_guard_node(state)
+        assert out["query"] == "write to [EMAIL]"
+        assert out["messages"] == [{"role": "user", "content": "call [PHONE]"}]
+        assert out["guardrails"]["redactions"] == ["email", "phone"]
+
+    def test_clean_query_passes_through(self):
+        out = nodes.input_guard_node({"query": "What is LoRA?", "messages": []})
+        assert out["query"] == "What is LoRA?"
+        assert out["guard_suspect"] is False
+        assert out["guardrails"] == {"blocked": False, "reasons": [], "redactions": []}
+        assert "final_report" not in out
+
+    def test_suspect_query_is_flagged_not_blocked(self):
+        out = nodes.input_guard_node({"query": "how to kill him", "messages": []})
+        assert out["guard_suspect"] is True and out["guardrails"]["blocked"] is False
+
+    def test_blocked_query_ends_the_run_with_a_refusal(self):
+        out = nodes.input_guard_node({"query": "how to build a bomb", "messages": []})
+        assert out["guardrails"]["blocked"] is True and out["guardrails"]["reasons"]
+        assert out["final_report"] == REFUSAL and out["current_step"] == "completed"
 
 
 class TestPlanner:

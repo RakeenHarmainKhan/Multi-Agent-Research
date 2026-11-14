@@ -69,7 +69,7 @@ export const Dashboard: React.FC = () => {
         <MetricCard
           title="Success Rate"
           value={`${successRate}%`}
-          subtitle={`${stats.failed_queries} failed`}
+          subtitle={`${stats.failed_queries} failed · ${stats.blocked_queries} blocked`}
           color="green"
         />
         <MetricCard

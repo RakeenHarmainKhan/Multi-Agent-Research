@@ -118,6 +118,24 @@ class TestWriterOutput:
         assert "gateway timeout" in out["error"]
 
 
+class TestWriterLinks:
+    def test_a_link_that_is_not_a_retrieved_source_is_removed(self, fake_llm):
+        fake_llm.reply = "Fact [1]. See [more](http://evil.test/x) and http://other.test."
+        out = nodes.writer_node({"query": "q", "web_results": WEB, "academic_results": []})
+        assert "evil.test" not in out["final_report"] and "other.test" not in out["final_report"]
+        assert "Fact [1]." in out["final_report"] and "more" in out["final_report"]
+
+    def test_a_link_to_a_retrieved_source_is_kept(self, fake_llm):
+        fake_llm.reply = "Fact [1]. Read [Alpha](http://alpha) too."
+        out = nodes.writer_node({"query": "q", "web_results": WEB, "academic_results": []})
+        assert "[Alpha](http://alpha)" in out["final_report"]
+
+    def test_citations_still_work_after_link_cleanup(self, fake_llm):
+        fake_llm.reply = "Fact [1] and [x](http://evil.test)."
+        out = nodes.writer_node({"query": "q", "web_results": WEB, "academic_results": []})
+        assert [c["id"] for c in out["citations"]] == [1]
+
+
 class TestSimpleChat:
     def test_returns_answer_and_extends_history(self, fake_llm):
         fake_llm.reply = "A neural network is..."
