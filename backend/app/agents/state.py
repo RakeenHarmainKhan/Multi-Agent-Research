@@ -20,9 +20,7 @@ class ResearchState(TypedDict, total=False):
     query: str
     thread_id: str
     mode: Literal["auto", "research"]
-    selected_model: str
-    api_key: str
-    
+
     # Classification outputs
     intent: Literal["CHAT", "RESEARCH", "REJECTED"]
     requires_academic: bool

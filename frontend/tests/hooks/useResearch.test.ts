@@ -68,21 +68,16 @@ describe('executeResearch', () => {
     expect(executeResearch).not.toHaveBeenCalled();
   });
 
-  it('prefers the custom model from saved settings', async () => {
+  it('never sends a model or API key from the browser', async () => {
     localStorage.setItem(
       'mara_settings',
       JSON.stringify({ customModel: 'custom-x', defaultModel: 'default-y', apiKey: 'k' })
     );
     const { result } = renderHook(() => useResearch());
     await act(() => result.current.executeResearch('q'));
-    expect(executeResearch.mock.calls[0][0]).toMatchObject({ model: 'custom-x', api_key: 'k' });
-  });
-
-  it('survives corrupt saved settings', async () => {
-    localStorage.setItem('mara_settings', '{not json');
-    const { result } = renderHook(() => useResearch());
-    await act(() => result.current.executeResearch('q'));
-    expect(executeResearch).toHaveBeenCalled();
+    const sent = executeResearch.mock.calls[0][0] as unknown as Record<string, unknown>;
+    expect(sent).not.toHaveProperty('model');
+    expect(sent).not.toHaveProperty('api_key');
   });
 
   it('records an error and an apology message on failure', async () => {

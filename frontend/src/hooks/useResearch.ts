@@ -8,26 +8,8 @@ import { useState, useCallback } from 'react';
 import { apiService } from '../services/api';
 import type { Message, ResearchMode, ResearchRequest, Citation } from '../types';
 
-interface ClientSettings {
-  defaultModel?: string;
-  apiKey?: string;
-  customModel?: string;
-}
-
-const SETTINGS_STORAGE_KEY = 'mara_settings';
 // The backend only uses the last few turns as context; don't ship the whole chat.
 const HISTORY_TO_SEND = 10;
-
-const readClientSettings = (): ClientSettings => {
-  try {
-    const rawValue = localStorage.getItem(SETTINGS_STORAGE_KEY);
-    if (!rawValue) return {};
-    const parsed = JSON.parse(rawValue) as ClientSettings;
-    return parsed ?? {};
-  } catch {
-    return {};
-  }
-};
 
 interface UseResearchReturn {
   messages: Message[];
@@ -73,17 +55,6 @@ export const useResearch = (): UseResearchReturn => {
           content: message.content,
         })),
       };
-
-      const clientSettings = readClientSettings();
-      // Prioritize customModel over defaultModel selection
-      const modelToUse = clientSettings.customModel?.trim() || clientSettings.defaultModel?.trim();
-
-      if (modelToUse) {
-        request.model = modelToUse;
-      }
-      if (clientSettings.apiKey?.trim()) {
-        request.api_key = clientSettings.apiKey.trim();
-      }
 
       const response = await apiService.executeResearch(request);
 

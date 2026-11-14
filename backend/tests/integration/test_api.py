@@ -76,6 +76,12 @@ class TestResearchEndpoint:
         client.post("/api/v1/research", json={"query": "lora"})
         assert graph.inputs["mode"] == "auto"
 
+    def test_client_cannot_override_model_or_key(self, client, graph):
+        """Old clients may still send these; they are ignored, never forwarded to the graph."""
+        r = client.post("/api/v1/research", json={"query": "q", "model": "x", "api_key": "sk-123"})
+        assert r.status_code == 200
+        assert "api_key" not in graph.inputs and "selected_model" not in graph.inputs
+
     def test_research_mode_is_forwarded_to_graph(self, client, graph):
         client.post("/api/v1/research", json={"query": "lora", "mode": "research"})
         assert graph.inputs["mode"] == "research"

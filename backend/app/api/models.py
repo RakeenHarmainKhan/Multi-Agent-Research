@@ -24,8 +24,6 @@ class ResearchRequest(BaseModel):
         "auto", description="auto: classifier decides chat vs research; research: always run web research"
     )
     user_feedback: Optional[str] = Field(None, description="Feedback for report revision")
-    model: Optional[str] = Field(None, description="Optional OpenRouter model override for this request")
-    api_key: Optional[str] = Field(None, description="Optional user-provided OpenRouter API key")
     messages: List[ConversationMessage] = Field(
         default_factory=list,
         max_length=50,

@@ -33,8 +33,6 @@ export interface ResearchRequest {
   thread_id?: string;
   mode?: ResearchMode;
   user_feedback?: string;
-  model?: string;
-  api_key?: string;
   messages?: Array<Pick<Message, 'role' | 'content'>>;
 }
 

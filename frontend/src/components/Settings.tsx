@@ -1,65 +1,21 @@
 /**
- * Application settings and configuration panel.
+ * Settings: shows how the backend is configured. Model, keys and pricing are
+ * server-side settings (backend/.env), so nothing here is editable.
  */
 import React, { useEffect, useState } from 'react';
-import { copyToClipboard } from '../utils/helpers';
-
-const SETTINGS_STORAGE_KEY = 'mara_settings';
-
-interface SettingsState {
-  defaultModel: string;
-  temperature: number;
-  maxTokens: number;
-  enableCitations: boolean;
-}
+import { apiService } from '../services/api';
+import type { HealthStatus } from '../types';
 
 export const Settings: React.FC = () => {
-  const [settings, setSettings] = useState<SettingsState>({
-    defaultModel: 'deepseek/deepseek-v4-flash',
-    temperature: 0.3,
-    maxTokens: 4000,
-    enableCitations: true,
-  });
-
-  const [apiKey, setApiKey] = useState('');
-  const [customModel, setCustomModel] = useState('');
-  const [saved, setSaved] = useState(false);
+  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
-    try {
-      const rawValue = localStorage.getItem(SETTINGS_STORAGE_KEY);
-      if (!rawValue) return;
-
-      const parsed = JSON.parse(rawValue) as Partial<SettingsState> & {
-        apiKey?: string;
-        groqApiKey?: string;
-        customModel?: string;
-      };
-
-      setSettings((prev) => ({
-        ...prev,
-        ...parsed,
-      }));
-      setApiKey(parsed.apiKey ?? '');
-      setCustomModel(parsed.customModel ?? '');
-    } catch {
-      // Keep defaults when local storage is malformed
-    }
+    apiService
+      .checkHealth()
+      .then(setHealth)
+      .catch(() => setError(true));
   }, []);
-
-  const handleSave = () => {
-    localStorage.setItem(
-      SETTINGS_STORAGE_KEY,
-      JSON.stringify({
-        ...settings,
-        apiKey: apiKey.trim(),
-        customModel: customModel.trim(),
-      })
-    );
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
-  };
-
 
   return (
     <div className="h-full overflow-y-auto bg-slate-950 p-8">
@@ -67,132 +23,38 @@ export const Settings: React.FC = () => {
       <div className="mb-8">
         <h2 className="text-3xl font-bold text-slate-100">Settings</h2>
         <p className="text-slate-400 mt-2">
-          Configure your research assistant preferences
+          Configuration of the research backend
         </p>
       </div>
 
       <div className="max-w-4xl space-y-6">
-        {/* API Configuration */}
-        <Section title="API Configuration">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                OpenRouter API Key
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="sk-or-v1-..."
-                  className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-slate-200 focus:outline-none focus:border-blue-500"
-                />
-                <button
-                  onClick={() => copyToClipboard(apiKey)}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700"
-                >
-                  Copy
-                </button>
-              </div>
-              <p className="text-xs text-slate-500 mt-2">
-                Get your free API key at{' '}
-                <a
-                  href="https://openrouter.ai"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-400 hover:underline"
-                >
-                  openrouter.ai
-                </a>
-              </p>
-              <p className="text-xs text-slate-500 mt-1">
-                Leave this blank to use the backend default API key.
-              </p>
-            </div>
-          </div>
-          <div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Custom Model Identifier (Optional)
-              </label>
-              <input
-                type="text"
-                value={customModel}
-                onChange={(e) => setCustomModel(e.target.value)}
-                placeholder="e.g. meta-llama/llama-3.2-3b-instruct:free"
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-slate-200 focus:outline-none focus:border-blue-500"
-              />
-              <p className="text-xs text-slate-500 mt-2">
-                If provided, this model will be used regardless of the dropdown selection.
-              </p>
-            </div>
-          </div>
-        </Section>
-
-        {/* Model Configuration */}
-        <Section title="Inference Settings">
-          <div className="space-y-4">
-
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Temperature: {settings.temperature}
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.1"
-                value={settings.temperature}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    temperature: parseFloat(e.target.value),
-                  })
-                }
-                className="w-full"
-              />
-              <p className="text-xs text-slate-500 mt-1">
-                Lower = More focused, Higher = More creative
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">
-                Max Tokens: {settings.maxTokens}
-              </label>
-              <input
-                type="range"
-                min="500"
-                max="32000"
-                step="500"
-                value={settings.maxTokens}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    maxTokens: parseInt(e.target.value),
-                  })
-                }
-                className="w-full"
-              />
-              <p className="text-xs text-slate-500 mt-1">
-                Maximum length of generated reports
-              </p>
-            </div>
-          </div>
-        </Section>
-
-        {/* Research Settings */}
-        <Section title="Research Preferences">
-          <div className="space-y-4">
-            <ToggleSetting
-              label="Enable Citations"
-              description="Include inline citations in research reports"
-              checked={settings.enableCitations}
-              onChange={(checked) =>
-                setSettings({ ...settings, enableCitations: checked })
+        <Section title="Backend Configuration">
+          <div className="space-y-3 text-sm">
+            <Row
+              label="Backend"
+              value={error ? 'Unreachable' : health ? `Online · v${health.version}` : 'Checking…'}
+            />
+            <Row
+              label="LLM"
+              value={
+                health
+                  ? health.llm_service === 'configured'
+                    ? 'Configured'
+                    : 'Not configured'
+                  : '—'
               }
             />
+            <Row label="Run storage" value={health?.database ?? '—'} />
           </div>
+          <p className="text-xs text-slate-500 mt-4 leading-relaxed">
+            The model, API keys and optional pricing are set on the server in{' '}
+            <code className="text-cyan-400">backend/.env</code> (see{' '}
+            <code className="text-cyan-400">backend/.env.example</code>): the{' '}
+            <code className="text-cyan-400">AZURE_OPENAI_*</code> variables select your deployment,{' '}
+            <code className="text-cyan-400">TAVILY_API_KEY</code> enables web search, and{' '}
+            <code className="text-cyan-400">LLM_*_COST_PER_1M_TOKENS</code> enables cost estimates.
+            Keys are never sent from the browser.
+          </p>
         </Section>
 
         {/* About */}
@@ -208,23 +70,8 @@ export const Settings: React.FC = () => {
             <p>
               <strong className="text-slate-300">License:</strong> MIT
             </p>
-            <div className="pt-4 border-t border-slate-800">
-              <p className="text-slate-500 text-xs">
-                Built with ❤️ for comprehensive research automation
-              </p>
-            </div>
           </div>
         </Section>
-
-        {/* Save Button */}
-        <div className="flex justify-end pt-6">
-          <button
-            onClick={handleSave}
-            className="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors font-semibold"
-          >
-            {saved ? '✓ Saved!' : 'Save Settings'}
-          </button>
-        </div>
       </div>
     </div>
   );
@@ -241,33 +88,9 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({
   </div>
 );
 
-interface ToggleSettingProps {
-  label: string;
-  description: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}
-
-const ToggleSetting: React.FC<ToggleSettingProps> = ({
-  label,
-  description,
-  checked,
-  onChange,
-}) => (
-  <div className="flex items-center justify-between">
-    <div>
-      <p className="text-slate-300 font-medium">{label}</p>
-      <p className="text-sm text-slate-500">{description}</p>
-    </div>
-    <button
-      onClick={() => onChange(!checked)}
-      className={`relative w-12 h-6 rounded-full transition-colors ${checked ? 'bg-blue-600' : 'bg-slate-700'
-        }`}
-    >
-      <span
-        className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${checked ? 'translate-x-6' : 'translate-x-0'
-          }`}
-      />
-    </button>
+const Row: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div className="flex items-center justify-between p-3 bg-slate-800 rounded-lg">
+    <span className="text-slate-300">{label}</span>
+    <span className="text-slate-400">{value}</span>
   </div>
 );

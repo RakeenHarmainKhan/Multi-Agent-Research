@@ -34,8 +34,6 @@ async def execute_research(request: ResearchRequest):
             "query": request.query,
             "thread_id": thread_id,
             "mode": request.mode,
-            "selected_model": request.model,
-            "api_key": request.api_key,
             "user_feedback": request.user_feedback or "",
             "revision_count": 0,
             "approved": not settings.ENABLE_HUMAN_REVIEW,
