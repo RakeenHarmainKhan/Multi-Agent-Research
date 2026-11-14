@@ -82,6 +82,15 @@ class TestResearchEndpoint:
         r = client.post("/api/v1/research", json={"query": "q", "thread_id": "abc"})
         assert r.json()["thread_id"] == "abc"
 
+    def test_follow_up_after_long_report_is_accepted(self, client, graph):
+        """Regression: research reports exceed 2k chars and used to 422 the next question."""
+        history = [
+            {"role": "user", "content": "first"},
+            {"role": "assistant", "content": "x" * 3000},
+        ]
+        r = client.post("/api/v1/research", json={"query": "and its cost?", "messages": history})
+        assert r.status_code == 200
+
     @pytest.mark.parametrize(
         "payload",
         [
@@ -90,6 +99,7 @@ class TestResearchEndpoint:
             {"query": "q", "mode": "bogus"},
             {"query": "x" * 1501},
             {"query": "q", "messages": [{"role": "robot", "content": "hi"}]},
+            {"query": "q", "messages": [{"role": "user", "content": "m"}] * 51},
         ],
     )
     def test_invalid_requests_are_rejected(self, client, graph, payload):

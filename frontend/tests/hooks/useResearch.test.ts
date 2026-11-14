@@ -52,6 +52,16 @@ describe('executeResearch', () => {
     ]);
   });
 
+  it('sends at most the last 10 messages as history', async () => {
+    const { result } = renderHook(() => useResearch());
+    for (let i = 0; i < 7; i++) {
+      await act(() => result.current.executeResearch(`q${i}`));
+    }
+    const lastCall = executeResearch.mock.calls.at(-1)![0];
+    expect(lastCall.messages).toHaveLength(10);
+    expect(lastCall.messages!.at(-1)).toEqual({ role: 'assistant', content: 'Report [1]' });
+  });
+
   it('ignores blank queries', async () => {
     const { result } = renderHook(() => useResearch());
     await act(() => result.current.executeResearch('   '));

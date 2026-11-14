@@ -15,6 +15,8 @@ interface ClientSettings {
 }
 
 const SETTINGS_STORAGE_KEY = 'mara_settings';
+// The backend only uses the last few turns as context; don't ship the whole chat.
+const HISTORY_TO_SEND = 10;
 
 const readClientSettings = (): ClientSettings => {
   try {
@@ -66,7 +68,7 @@ export const useResearch = (): UseResearchReturn => {
         query,
         mode,
         thread_id: currentThreadId || undefined,
-        messages: messages.map((message) => ({
+        messages: messages.slice(-HISTORY_TO_SEND).map((message) => ({
           role: message.role,
           content: message.content,
         })),

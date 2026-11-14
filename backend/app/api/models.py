@@ -8,7 +8,8 @@ from pydantic import BaseModel, Field
 class ConversationMessage(BaseModel):
     """Serializable message payload from the frontend."""
     role: Literal["user", "assistant", "system"]
-    content: str = Field(..., min_length=1, max_length=2000)
+    # Assistant reports routinely exceed 2k chars; prompts only use a truncated tail anyway.
+    content: str = Field(..., min_length=1, max_length=20000)
 
 class ResearchRequest(BaseModel):
     """Request model for initiating research."""
@@ -25,7 +26,11 @@ class ResearchRequest(BaseModel):
     user_feedback: Optional[str] = Field(None, description="Feedback for report revision")
     model: Optional[str] = Field(None, description="Optional OpenRouter model override for this request")
     api_key: Optional[str] = Field(None, description="Optional user-provided OpenRouter API key")
-    messages: List[ConversationMessage] = Field(default_factory=list, description="Recent conversation history for stateless context")
+    messages: List[ConversationMessage] = Field(
+        default_factory=list,
+        max_length=50,
+        description="Recent conversation history for stateless context",
+    )
 
 
 class FeedbackRequest(BaseModel):
