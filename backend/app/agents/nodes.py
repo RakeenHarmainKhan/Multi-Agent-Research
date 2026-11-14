@@ -67,7 +67,7 @@ def _invoke_with_llm(state: Dict[str, Any], prompt_messages: List[Any]):
 
 class IntentClassification(BaseModel):
     """Schema for intent classification output."""
-    intent: Literal["CHAT", "RESEARCH"]
+    intent: Literal["CHAT", "RESEARCH", "REJECTED"]
     requires_academic: bool = False
     requires_web: bool = True
     reasoning: str = Field(description="Why this classification was chosen")
@@ -122,16 +122,17 @@ def intent_classifier_node(state: Dict[str, Any]) -> Dict[str, Any]:
 {format_instructions}
 
 Instructions:
-1. If the query is NOT related to Artificial Intelligence (e.g., cooking, bread, general news, hardware), return REJECTED.
-2. If the query is a simple AI chat question, return CHAT.
-3. If it requires in-depth analysis or search, return RESEARCH.
+1. If the query is NOT related to Artificial Intelligence (e.g., cooking, bread, general news, hardware), set intent to REJECTED.
+2. If the query is a simple AI chat question, set intent to CHAT.
+3. If it requires in-depth analysis or search, set intent to RESEARCH.
+Always answer with the JSON object only.
 
 Examples:
-- "How to bake a pizza?" → REJECTED
-- "Best sourdough starter" → REJECTED
-- "Who won the world cup?" → REJECTED
-- "What is a neural network?" → CHAT
-- "Latest breakthroughs in LLM architectures 2024" → RESEARCH (web=true)
+- "How to bake a pizza?" → intent REJECTED
+- "Best sourdough starter" → intent REJECTED
+- "Who won the world cup?" → intent REJECTED
+- "What is a neural network?" → intent CHAT
+- "Latest breakthroughs in LLM architectures 2024" → intent RESEARCH (requires_web=true)
 """,
         ),
         (
@@ -149,16 +150,21 @@ Examples:
         )
         response = _invoke_with_llm(state, prompt_messages)
         content = response.content.strip()
-        
-        # Handle cases where model returns raw REJECTED instead of JSON
-        if content == "REJECTED" or '"intent": "REJECTED"' in content or "REJECTED" in content.upper():
+
+        # Tolerate a bare "REJECTED" reply; otherwise the intent must come from the parsed JSON,
+        # never from the word appearing somewhere in the text (e.g. inside `reasoning`).
+        if content.strip('"').upper() == "REJECTED":
+            result = IntentClassification(intent="REJECTED", reasoning="bare REJECTED reply")
+        else:
+            result = parser.parse(content)
+
+        if result.intent == "REJECTED":
             logger.info("Query rejected by intent classifier. Sending to simple chat for brief response.")
             return {
                 "intent": "REJECTED",
                 "current_step": "chat",
             }
 
-        result = parser.parse(content)
         logger.info(
             "Intent: %s (academic=%s, web=%s)",
             result.intent,

@@ -24,7 +24,7 @@ class ResearchState(TypedDict, total=False):
     api_key: str
     
     # Classification outputs
-    intent: Literal["CHAT", "RESEARCH"]
+    intent: Literal["CHAT", "RESEARCH", "REJECTED"]
     requires_academic: bool
     requires_web: bool
     

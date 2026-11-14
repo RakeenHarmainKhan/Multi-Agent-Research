@@ -46,9 +46,28 @@ class TestIntentClassifier:
         assert out["current_step"] == "chat"
 
     def test_rejected_query_goes_to_chat_with_rejected_intent(self, fake_llm):
+        fake_llm.reply = _classifier_reply("REJECTED", web=False)
+        out = nodes.intent_classifier_node({"query": "How to bake pizza?", "messages": []})
+        assert out == {"intent": "REJECTED", "current_step": "chat"}
+
+    def test_bare_rejected_reply_is_tolerated(self, fake_llm):
         fake_llm.reply = "REJECTED"
         out = nodes.intent_classifier_node({"query": "How to bake pizza?", "messages": []})
         assert out == {"intent": "REJECTED", "current_step": "chat"}
+
+    def test_word_rejected_in_reasoning_does_not_reject(self, fake_llm):
+        """Regression: any reply containing 'rejected' used to be treated as off-topic."""
+        fake_llm.reply = json.dumps(
+            {
+                "intent": "RESEARCH",
+                "requires_academic": False,
+                "requires_web": True,
+                "reasoning": "AI question, so it is not REJECTED",
+            }
+        )
+        out = nodes.intent_classifier_node({"query": "Why are some LLM papers rejected?", "messages": []})
+        assert out["intent"] == "RESEARCH"
+        assert out["current_step"] == "planning"
 
     def test_research_mode_skips_the_llm(self, fake_llm):
         out = nodes.intent_classifier_node({"query": "anything", "mode": "research", "messages": []})
