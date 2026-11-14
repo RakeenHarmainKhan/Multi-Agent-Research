@@ -1,14 +1,13 @@
 /**
- * Main chat interface for query input & research results display
- * Sends post (research) with query, thread_id & previous messages
- * Recieves md report (status, execution time, thread_id)
- * 
+ * Main chat interface: query input, mode selection and research results display.
+ * Sends the query with thread_id and recent messages; renders the markdown report,
+ * its cited sources and (when human review is on) approve/revise controls.
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { useResearch } from '../hooks/useResearch';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { downloadTextFile } from '../utils/helpers';
-import type { Citation as CitationType, ResearchMode } from '../types';
+import type { ResearchMode } from '../types';
 
 export const ChatInterface: React.FC = () => {
   const [input, setInput] = useState('');
@@ -43,6 +42,11 @@ export const ChatInterface: React.FC = () => {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const requestChanges = () => {
+    const feedback = prompt('What would you like to change?');
+    if (feedback) submitFeedback(feedback, false);
   };
 
   return (
@@ -82,117 +86,117 @@ export const ChatInterface: React.FC = () => {
           </div>
         ) : (
           <>
-            {messages.map((message, idx) => (
-              <div
-                key={idx}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'
-                  }`}
-              >
+            {messages.map((message, idx) => {
+              const isLast = idx === messages.length - 1;
+              return (
                 <div
-                  className={`max-w-4xl ${message.role === 'user'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-900 border border-slate-800'
-                    } rounded-lg p-5 shadow-lg`}
+                  key={idx}
+                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'
+                    }`}
                 >
-                  {message.role === 'user' ? (
-                    <p className="whitespace-pre-wrap">{message.content}</p>
-                  ) : (
-                    <div>
-                      <MarkdownRenderer
-                        content={message.content}
-                        citationIds={idx === messages.length - 1 ? currentCitations?.map((c) => c.id) : []}
-                      />
+                  <div
+                    className={`max-w-4xl ${message.role === 'user'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-900 border border-slate-800'
+                      } rounded-lg p-5 shadow-lg`}
+                  >
+                    {message.role === 'user' ? (
+                      <p className="whitespace-pre-wrap">{message.content}</p>
+                    ) : (
+                      <div>
+                        <MarkdownRenderer
+                          content={message.content}
+                          citationIds={isLast ? currentCitations.map((c) => c.id) : []}
+                        />
 
-                      {/* Sources Expander */}
-                      {idx === messages.length - 1 && currentCitations && currentCitations.length > 0 && (
-                        <div className="mt-6 border-t border-slate-800 pt-4">
-                          <details className="group">
-                            <summary className="text-xs font-semibold text-slate-500 cursor-pointer hover:text-slate-300 transition-colors uppercase tracking-wider flex items-center gap-2">
-                              <span className="group-open:rotate-90 transition-transform">▶</span>
-                              Sources ({currentCitations.length})
-                            </summary>
-                            <div className="mt-4 grid grid-cols-1 gap-3">
-                              {currentCitations.map((cite: CitationType) => (
-                                <div key={cite.id} id={`cite-${cite.id}`} className="p-3 bg-slate-950/50 rounded border border-slate-800 text-xs">
-                                  <p className="text-slate-300 break-all">
-                                    <span className="text-blue-400 font-semibold mr-1">[{cite.id}]</span>
-                                    {cite.url ? (
-                                      <a href={cite.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
-                                        {cite.title || cite.url}
-                                      </a>
-                                    ) : (
-                                      cite.title
-                                    )}
-                                  </p>
-                                  <p className="text-slate-500 mt-1 line-clamp-3">{cite.snippet}</p>
-                                  <p className="text-slate-600 mt-1 uppercase text-[10px]">{cite.type}</p>
-                                </div>
-                              ))}
-                            </div>
-                          </details>
-                        </div>
-                      )}
+                        {/* Sources Expander */}
+                        {isLast && currentCitations.length > 0 && (
+                          <div className="mt-6 border-t border-slate-800 pt-4">
+                            <details className="group">
+                              <summary className="text-xs font-semibold text-slate-500 cursor-pointer hover:text-slate-300 transition-colors uppercase tracking-wider flex items-center gap-2">
+                                <span className="group-open:rotate-90 transition-transform">▶</span>
+                                Sources ({currentCitations.length})
+                              </summary>
+                              <div className="mt-4 grid grid-cols-1 gap-3">
+                                {currentCitations.map((cite) => (
+                                  <div key={cite.id} id={`cite-${cite.id}`} className="p-3 bg-slate-950/50 rounded border border-slate-800 text-xs">
+                                    <p className="text-slate-300 break-all">
+                                      <span className="text-blue-400 font-semibold mr-1">[{cite.id}]</span>
+                                      {cite.url ? (
+                                        <a href={cite.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                                          {cite.title || cite.url}
+                                        </a>
+                                      ) : (
+                                        cite.title
+                                      )}
+                                    </p>
+                                    <p className="text-slate-500 mt-1 line-clamp-3">{cite.snippet}</p>
+                                    <p className="text-slate-600 mt-1 uppercase text-[10px]">{cite.type}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          </div>
+                        )}
 
-                      <div className="flex gap-2 mt-4 pt-4 border-t border-slate-700/50">
-                        <button
-                          onClick={() => navigator.clipboard.writeText(message.content)}
-                          className="px-3 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors"
-                        >
-                          Copy
-                        </button>
-                        <button
-                          onClick={() => downloadTextFile(message.content, `MARA_Report_${new Date().getTime()}.md`)}
-                          className="px-3 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors"
-                        >
-                          Download .md
-                        </button>
-                        {idx === messages.length - 1 && (
+                        <div className="flex gap-2 mt-4 pt-4 border-t border-slate-700/50">
                           <button
-                            onClick={() => regenerate(mode)}
-                            disabled={isLoading}
-                            className="px-3 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors disabled:opacity-50"
+                            onClick={() => navigator.clipboard.writeText(message.content)}
+                            className="px-3 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors"
                           >
-                            Regenerate
+                            Copy
                           </button>
+                          <button
+                            onClick={() => downloadTextFile(message.content, `MARA_Report_${new Date().getTime()}.md`)}
+                            className="px-3 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors"
+                          >
+                            Download .md
+                          </button>
+                          {isLast && (
+                            <button
+                              onClick={() => regenerate(mode)}
+                              disabled={isLoading}
+                              className="px-3 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors disabled:opacity-50"
+                            >
+                              Regenerate
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Review Controls (Inside Assistant Bubble) */}
+                        {isLast && awaitingReview && (
+                          <div className="mt-6 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg space-y-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
+                              <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider">Human Review Required</h4>
+                            </div>
+                            <p className="text-xs text-slate-400 leading-relaxed">
+                              The agents have finished researching. Would you like to approve this report or request a specific revision?
+                            </p>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => submitFeedback('', true)}
+                                disabled={isLoading}
+                                className="px-4 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded text-xs font-bold transition-all disabled:opacity-50"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={requestChanges}
+                                disabled={isLoading}
+                                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-bold transition-all disabled:opacity-50"
+                              >
+                                Request Changes
+                              </button>
+                            </div>
+                          </div>
                         )}
                       </div>
-
-                      {/* Review Controls (Inside Assistant Bubble) */}
-                      {idx === messages.length - 1 && awaitingReview && (
-                        <div className="mt-6 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg space-y-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
-                            <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider">Human Review Required</h4>
-                          </div>
-                          <p className="text-xs text-slate-400 leading-relaxed">
-                            The agents have finished researching. Would you like to approve this report or request a specific revision?
-                          </p>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => submitFeedback('', true)}
-                              disabled={isLoading}
-                              className="px-4 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded text-xs font-bold transition-all disabled:opacity-50"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => {
-                                const feedback = prompt("What would you like to change?");
-                                if (feedback) submitFeedback(feedback, false);
-                              }}
-                              disabled={isLoading}
-                              className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-bold transition-all disabled:opacity-50"
-                            >
-                              Request Changes
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {/* Loading Indicator */}
             {isLoading && (
@@ -235,10 +239,7 @@ export const ChatInterface: React.FC = () => {
                     Approve Report
                   </button>
                   <button
-                    onClick={() => {
-                      const feedback = prompt("What would you like to change?");
-                      if (feedback) submitFeedback(feedback, false);
-                    }}
+                    onClick={requestChanges}
                     disabled={isLoading}
                     className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors text-sm font-bold disabled:opacity-50"
                   >

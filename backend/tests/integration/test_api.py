@@ -208,7 +208,7 @@ class TestUsageAccounting:
                 reply("Fact [1].", 300, 80),  # writer
             ]
         )
-        monkeypatch.setattr(nodes, "_build_llm", lambda state: GenericFakeChatModel(messages=replies))
+        monkeypatch.setattr(nodes, "_build_llm", lambda: GenericFakeChatModel(messages=replies))
 
         class Web:
             def invoke(self, q):

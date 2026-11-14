@@ -11,14 +11,10 @@ class ConversationMessage(BaseModel):
     # Assistant reports routinely exceed 2k chars; prompts only use a truncated tail anyway.
     content: str = Field(..., min_length=1, max_length=20000)
 
+
 class ResearchRequest(BaseModel):
     """Request model for initiating research."""
-    query: str = Field(
-        ..., 
-        min_length=1, 
-        max_length=1500, 
-        description="Research question or topic"
-    )
+    query: str = Field(..., min_length=1, max_length=1500, description="Research question or topic")
     thread_id: Optional[str] = Field(None, description="Session ID for conversation continuity")
     mode: Literal["auto", "research"] = Field(
         "auto", description="auto: classifier decides chat vs research; research: always run web research"
@@ -62,6 +58,7 @@ class SystemStats(BaseModel):
     avg_tokens_per_query: float
     total_cost: Optional[float] = None
     queries_today: int
+
 
 class HealthCheck(BaseModel):
     """API health status."""

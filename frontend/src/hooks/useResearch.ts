@@ -1,8 +1,5 @@
 /**
- * Centralized state management
- * Custom React hook for research operations.
- * Makes api call to /research, 
- * Manages state and API calls for research workflow.
+ * Chat state and API calls for the research workflow (ask, regenerate, review feedback).
  */
 import { useState, useCallback } from 'react';
 import { apiService } from '../services/api';
@@ -33,28 +30,22 @@ export const useResearch = (): UseResearchReturn => {
   const [citations, setCitations] = useState<Citation[]>([]);
   const [awaitingReview, setAwaitingReview] = useState(false);
 
+  const appendAssistant = useCallback((content: string) => {
+    setMessages((prev) => [...prev, { role: 'assistant', content, timestamp: new Date() }]);
+  }, []);
+
   /** Ask `query` with `history` as context; the chat becomes `history` + question + answer. */
   const runQuery = useCallback(async (query: string, mode: ResearchMode, history: Message[]) => {
     setIsLoading(true);
     setError(null);
-
-    // Add user message
-    const userMessage: Message = {
-      role: 'user',
-      content: query,
-      timestamp: new Date(),
-    };
-    setMessages([...history, userMessage]);
+    setMessages([...history, { role: 'user', content: query, timestamp: new Date() }]);
 
     try {
       const request: ResearchRequest = {
         query,
         mode,
         thread_id: currentThreadId || undefined,
-        messages: history.slice(-HISTORY_TO_SEND).map((message) => ({
-          role: message.role,
-          content: message.content,
-        })),
+        messages: history.slice(-HISTORY_TO_SEND).map(({ role, content }) => ({ role, content })),
       };
 
       const response = await apiService.executeResearch(request);
@@ -63,29 +54,15 @@ export const useResearch = (): UseResearchReturn => {
       setCurrentThreadId(response.thread_id);
       setCitations(response.citations || []);
       setAwaitingReview(response.status === 'awaiting_review');
-
-      // Add assistant response
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: response.report || 'Research completed but no report generated.',
-        timestamp: new Date(),
-      };
-
-      setMessages((prev) => [...prev, assistantMessage]);
+      appendAssistant(response.report || 'Research completed but no report generated.');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Research failed';
       setError(errorMessage);
-
-      const errorResponse: Message = {
-        role: 'assistant',
-        content: `Error: ${errorMessage}. Please try again.`,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorResponse]);
+      appendAssistant(`Error: ${errorMessage}. Please try again.`);
     } finally {
       setIsLoading(false);
     }
-  }, [currentThreadId]);
+  }, [currentThreadId, appendAssistant]);
 
   const executeResearch = useCallback(async (query: string, mode: ResearchMode = 'auto') => {
     if (!query.trim()) return;
@@ -110,19 +87,13 @@ export const useResearch = (): UseResearchReturn => {
       setCurrentThreadId(response.thread_id);
       setCitations(response.citations || []);
       setAwaitingReview(response.status === 'awaiting_review');
-
-      const assistantMessage: Message = {
-        role: 'assistant',
-        content: response.report || 'Research updated.',
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
+      appendAssistant(response.report || 'Research updated.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Feedback failed');
     } finally {
       setIsLoading(false);
     }
-  }, [currentThreadId]);
+  }, [currentThreadId, appendAssistant]);
 
   const clearMessages = useCallback(() => {
     setMessages([]);

@@ -1,5 +1,5 @@
 /**
- * Renders markdown content with syntax highlighting and proper formatting.
+ * Renders report markdown: GFM tables/lists, KaTeX math and clickable [n] citations.
  */
 import React from 'react';
 import ReactMarkdown from 'react-markdown';

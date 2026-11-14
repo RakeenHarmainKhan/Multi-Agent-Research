@@ -32,6 +32,21 @@ _FRESH_RUN_STATE: Dict[str, Any] = {
 }
 
 
+def _to_response(record: Dict[str, Any]) -> ResearchResponse:
+    """Build the API response from a stored run record."""
+    return ResearchResponse(
+        thread_id=record["thread_id"],
+        status=record["status"],
+        report=record.get("final_report"),
+        citations=record.get("citations", []),
+        sources=record.get("sources", []),
+        execution_time=record.get("execution_time"),
+        input_tokens=record.get("input_tokens", 0),
+        output_tokens=record.get("output_tokens", 0),
+        estimated_cost=record.get("estimated_cost"),
+    )
+
+
 @router.post("/research", response_model=ResearchResponse)
 async def execute_research(request: ResearchRequest):
     """Execute the research workflow."""
@@ -68,37 +83,25 @@ async def execute_research(request: ResearchRequest):
             and final_state.get("current_step") == "review"
             and not final_state.get("approved", False)
         )
-        status = "awaiting_review" if awaiting_review else "completed"
-
-        runtime_store.save_result(
-            {
-                "run_id": run_id,
-                "thread_id": thread_id,
-                "query": request.query,
-                "status": status,
-                "intent": final_state.get("intent", "UNKNOWN"),
-                "final_report": final_state.get("final_report", ""),
-                "sources": final_state.get("all_sources", []),
-                "citations": final_state.get("citations", []),
-                "execution_time": execution_time,
-                "created_at": datetime.now(timezone.utc),
-                **usage,
-            }
-        )
+        record = {
+            "run_id": run_id,
+            "thread_id": thread_id,
+            "query": request.query,
+            "status": "awaiting_review" if awaiting_review else "completed",
+            "intent": final_state.get("intent", "UNKNOWN"),
+            "final_report": final_state.get("final_report", ""),
+            "sources": final_state.get("all_sources", []),
+            "citations": final_state.get("citations", []),
+            "execution_time": execution_time,
+            "created_at": datetime.now(timezone.utc),
+            **usage,
+        }
+        runtime_store.save_result(record)
         logger.info(
             "Run %s finished in %.1fs, tokens in/out %s/%s",
             run_id, execution_time, usage["input_tokens"], usage["output_tokens"],
         )
-
-        return ResearchResponse(
-            thread_id=thread_id,
-            status=status,
-            report=final_state.get("final_report", ""),
-            citations=final_state.get("citations", []),
-            sources=final_state.get("all_sources", []),
-            execution_time=execution_time,
-            **usage,
-        )
+        return _to_response(record)
     except Exception as exc:
         logger.error("Research failed: %s", exc, exc_info=True)
         runtime_store.save_result(
@@ -117,20 +120,6 @@ async def execute_research(request: ResearchRequest):
             }
         )
         raise HTTPException(status_code=500, detail=str(exc))
-
-
-def _to_response(record: Dict[str, Any]) -> ResearchResponse:
-    return ResearchResponse(
-        thread_id=record["thread_id"],
-        status=record["status"],
-        report=record.get("final_report"),
-        citations=record.get("citations", []),
-        sources=record.get("sources", []),
-        execution_time=record.get("execution_time"),
-        input_tokens=record.get("input_tokens", 0),
-        output_tokens=record.get("output_tokens", 0),
-        estimated_cost=record.get("estimated_cost"),
-    )
 
 
 @router.get("/research/{thread_id}", response_model=ResearchResponse)
@@ -175,29 +164,17 @@ async def submit_feedback(thread_id: str, request: FeedbackRequest):
     usage["output_tokens"] += existing.get("output_tokens", 0)
     usage["estimated_cost"] = estimate_cost(usage["input_tokens"], usage["output_tokens"])
 
-    status = "completed" if final_state.get("approved") else "awaiting_review"
-    execution_time = existing.get("execution_time")
-    runtime_store.save_result(
-        {
-            **existing,
-            "status": status,
-            "intent": final_state.get("intent", existing.get("intent", "UNKNOWN")),
-            "final_report": final_state.get("final_report", ""),
-            "sources": final_state.get("all_sources", []),
-            "citations": final_state.get("citations", []),
-            **usage,
-        }
-    )
-
-    return ResearchResponse(
-        thread_id=thread_id,
-        status=status,
-        report=final_state.get("final_report", ""),
-        citations=final_state.get("citations", []),
-        sources=final_state.get("all_sources", []),
-        execution_time=execution_time,
+    record = {
+        **existing,
+        "status": "completed" if final_state.get("approved") else "awaiting_review",
+        "intent": final_state.get("intent", existing.get("intent", "UNKNOWN")),
+        "final_report": final_state.get("final_report", ""),
+        "sources": final_state.get("all_sources", []),
+        "citations": final_state.get("citations", []),
         **usage,
-    )
+    }
+    runtime_store.save_result(record)
+    return _to_response(record)
 
 
 @router.get("/admin/stats", response_model=SystemStats)
@@ -227,17 +204,6 @@ def get_query_history(limit: int = 20):
     ]
 
 
-def _llm_configured() -> bool:
-    return all(
-        (
-            settings.AZURE_OPENAI_ENDPOINT,
-            settings.AZURE_OPENAI_CHAT_API_KEY,
-            settings.AZURE_OPENAI_CHAT_DEPLOYMENT,
-            settings.AZURE_OPENAI_CHAT_API_VERSION,
-        )
-    )
-
-
 @router.get("/health", response_model=HealthCheck)
 def health_check():
     """Health check endpoint."""
@@ -246,6 +212,6 @@ def health_check():
         version=settings.VERSION,
         uptime=round(time.time() - _PROCESS_START, 1),
         database="in-memory",
-        llm_service="configured" if _llm_configured() else "not_configured",
+        llm_service="not_configured" if settings.missing_llm_settings() else "configured",
         timestamp=datetime.now(timezone.utc),
     )

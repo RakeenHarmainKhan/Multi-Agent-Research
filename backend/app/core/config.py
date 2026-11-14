@@ -1,4 +1,5 @@
 """Application configuration."""
+import json
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -10,6 +11,20 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = BACKEND_ROOT / ".env"
 
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://*.vercel.app",
+    "https://*.onrender.com",
+]
+LLM_SETTING_NAMES = (
+    "AZURE_OPENAI_ENDPOINT",
+    "AZURE_OPENAI_CHAT_API_KEY",
+    "AZURE_OPENAI_CHAT_DEPLOYMENT",
+    "AZURE_OPENAI_CHAT_API_VERSION",
+)
+
+
 class Settings(BaseSettings):
     """Configuration loaded from environment variables."""
     # App Info
@@ -18,35 +33,9 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str = "development"
 
-    # CORS
-    BACKEND_CORS_ORIGINS: Any = [
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "https://*.vercel.app",
-        "https://*.onrender.com"
-    ]
+    # CORS: a list, a JSON list string, or a comma-separated string
+    BACKEND_CORS_ORIGINS: Any = DEFAULT_CORS_ORIGINS
 
-    @field_validator("BACKEND_CORS_ORIGINS", mode="before")
-    @classmethod
-    def assemble_cors_origins(cls, v: Any) -> List[str]:
-        if isinstance(v, str) and v.strip() != "":
-            if v.startswith("[") and v.endswith("]"):
-                import json
-                try:
-                    return json.loads(v)
-                except json.JSONDecodeError:
-                    pass
-            return [i.strip() for i in v.split(",")]
-        elif isinstance(v, list):
-            return v
-        return [
-            "http://localhost:5173",
-            "http://localhost:3000",
-            "https://*.vercel.app",
-            "https://*.onrender.com"
-        ]
-
-    # LLM Configuration
     # LLM Configuration (Azure OpenAI). Set these in backend/.env; nothing is hardcoded.
     AZURE_OPENAI_ENDPOINT: str = ""
     AZURE_OPENAI_CHAT_API_KEY: str = ""
@@ -55,11 +44,6 @@ class Settings(BaseSettings):
     # Optional pricing for cost estimates (USD per 1M tokens). Leave unset to report tokens only.
     LLM_INPUT_COST_PER_1M_TOKENS: float | None = None
     LLM_OUTPUT_COST_PER_1M_TOKENS: float | None = None
-
-    @field_validator("LLM_INPUT_COST_PER_1M_TOKENS", "LLM_OUTPUT_COST_PER_1M_TOKENS", mode="before")
-    @classmethod
-    def blank_price_means_unset(cls, v: Any) -> Any:
-        return None if isinstance(v, str) and not v.strip() else v
     MODEL_TEMPERATURE: float = 0.5
     MAX_TOKENS: int = 2000
     TIMEOUT: int = 60
@@ -78,6 +62,30 @@ class Settings(BaseSettings):
         case_sensitive=True,
         extra="ignore"
     )
+
+    @field_validator("BACKEND_CORS_ORIGINS", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: Any) -> List[str]:
+        if isinstance(v, list):
+            return v
+        if not isinstance(v, str) or not v.strip():
+            return list(DEFAULT_CORS_ORIGINS)
+        if v.startswith("[") and v.endswith("]"):
+            try:
+                return json.loads(v)
+            except json.JSONDecodeError:
+                pass
+        return [i.strip() for i in v.split(",")]
+
+    @field_validator("LLM_INPUT_COST_PER_1M_TOKENS", "LLM_OUTPUT_COST_PER_1M_TOKENS", mode="before")
+    @classmethod
+    def blank_price_means_unset(cls, v: Any) -> Any:
+        return None if isinstance(v, str) and not v.strip() else v
+
+    def missing_llm_settings(self) -> List[str]:
+        """Names of the Azure OpenAI settings that are still empty."""
+        return [name for name in LLM_SETTING_NAMES if not getattr(self, name)]
+
 
 @lru_cache()
 def get_settings() -> Settings:
@@ -102,5 +110,6 @@ def cors_options(origins: List[str]) -> Dict[str, Any]:
         "allow_origins": exact,
         "allow_origin_regex": f"^(?:{'|'.join(patterns)})$" if patterns else None,
     }
+
 
 settings = get_settings()

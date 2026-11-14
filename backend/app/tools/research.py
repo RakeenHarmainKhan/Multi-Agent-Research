@@ -2,75 +2,71 @@
 Research tools for agents to interact with external data sources.
 Implements web search, academic search, and citation extraction.
 """
+import logging
 import re
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any, Dict, List, Tuple
+
+from langchain_community.utilities import ArxivAPIWrapper
 from langchain_core.tools import tool
 from langchain_tavily import TavilySearch
-from langchain_community.utilities import ArxivAPIWrapper
+
 from app.core.config import settings
-import logging
 
 logger = logging.getLogger(__name__)
 
 
+class _MockSearchTool:
+    """Fallback search tool that keeps the workflow functional without a Tavily key."""
+
+    def invoke(self, query: str) -> List[Dict[str, Any]]:
+        return [
+            {
+                "title": "Search API not configured",
+                "url": "",
+                "content": (
+                    "Web search is currently running in fallback mode because no "
+                    "TAVILY_API_KEY is configured. "
+                    f"Original query: {query}"
+                ),
+                "score": 0.0,
+            }
+        ]
+
+
 class ResearchToolkit:
     """Collection of research tools with fallback mechanisms."""
-    
+
     def __init__(self):
         self.tavily_available = bool(settings.TAVILY_API_KEY)
-        
+
     def get_web_search_tool(self):
-        """
-        Returns configured web search tool (Tavily).
-        """
-        if self.tavily_available:
-            try:
-                return TavilySearch(
-                    tavily_api_key=settings.TAVILY_API_KEY,
-                    max_results=3,
-
-                    search_depth="basic", # 
-                    include_raw_content=False,
-                    include_answer=True,
-                    exclude_domains=["facebook.com", "instagram.com", "twitter.com", "youtube.com", "tiktok.com"]
-                )
-            except Exception:
-                logger.info("Tavily search API key missing or invalid, using mock fallback.")
-                return self._get_mock_search_tool()
-        else:
+        """Return the Tavily web search tool, or a mock when no key is configured."""
+        if not self.tavily_available:
             logger.warning("No web search API configured, using mock data")
-            return self._get_mock_search_tool()
-
-    def _get_mock_search_tool(self):
-        """Fallback search tool that keeps workflow functional without external keys."""
-
-        class _MockSearchTool:
-            def invoke(self, query: str) -> List[Dict[str, Any]]:
-                return [
-                    {
-                        "title": "Search API not configured",
-                        "url": "",
-                        "content": (
-                            "Web search is currently running in fallback mode because no "
-                            "TAVILY_API_KEY is configured. "
-                            f"Original query: {query}"
-                        ),
-                        "score": 0.0,
-                    }
-                ]
-
-        return _MockSearchTool()
+            return _MockSearchTool()
+        try:
+            return TavilySearch(
+                tavily_api_key=settings.TAVILY_API_KEY,
+                max_results=3,
+                search_depth="basic",
+                include_raw_content=False,
+                include_answer=True,
+                exclude_domains=["facebook.com", "instagram.com", "twitter.com", "youtube.com", "tiktok.com"],
+            )
+        except Exception:
+            logger.info("Tavily search API key missing or invalid, using mock fallback.")
+            return _MockSearchTool()
 
 
 @tool
 def academic_search(query: str, max_results: int = 3) -> str:
     """
     Search academic databases (Arxiv) for peer-reviewed papers.
-    
+
     Args:
         query: Scientific query string
         max_results: Maximum number of papers to return
-        
+
     Returns:
         Formatted string with paper titles, abstracts, and URLs
     """
@@ -79,17 +75,12 @@ def academic_search(query: str, max_results: int = 3) -> str:
             top_k_results=max_results,
             doc_content_chars_max=2000,
             load_max_docs=3,
-            sort_by="relevance"
-            # load_all_available_meta=True,
-            # load_all_available_content=True,
+            sort_by="relevance",
         )
-        results = arxiv.run(query)
-        return results
+        return arxiv.run(query)
     except Exception as e:
-        logger.error(f"Academic search failed: {e}")
-        return f"Academic search unavailable: {str(e)}"
-
-
+        logger.error("Academic search failed: %s", e)
+        return f"Academic search unavailable: {e}"
 
 
 def number_sources(
@@ -142,4 +133,3 @@ def build_citations(report: str, sources: List[Dict[str, Any]]) -> Tuple[str, Li
         for i in cited_ids
     ]
     return cleaned, citations
-

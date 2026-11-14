@@ -72,15 +72,8 @@ export const ResearchHistory: React.FC = () => {
     }
   };
 
-  const getIntentBadge = (intent?: string) => {
-    if (!intent) return null;
-    const colors = {
-      RESEARCH: 'bg-blue-500/20 text-blue-400',
-      CHAT: 'bg-purple-500/20 text-purple-400',
-      LITERATURE_REVIEW: 'bg-cyan-500/20 text-cyan-400',
-    };
-    return colors[intent as keyof typeof colors] || colors.RESEARCH;
-  };
+  const getIntentBadge = (intent: string) =>
+    intent === 'CHAT' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400';
 
   if (loading) {
     return (
@@ -197,7 +190,7 @@ export const ResearchHistory: React.FC = () => {
                           item.intent
                         )}`}
                       >
-                        {item.intent.replace('_', ' ')}
+                        {item.intent}
                       </span>
                     )}
 
