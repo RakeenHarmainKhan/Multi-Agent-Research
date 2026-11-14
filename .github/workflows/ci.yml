@@ -63,8 +63,5 @@ jobs:
       - name: Type-check and build
         run: npm run build
 
-      # Informational only: two existing react-hooks lint errors (App.tsx, Settings.tsx)
-      # are not fixed yet. Remove continue-on-error once they are.
       - name: Lint
         run: npm run lint
-        continue-on-error: true
