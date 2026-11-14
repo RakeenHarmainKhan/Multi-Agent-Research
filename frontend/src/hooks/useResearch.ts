@@ -19,6 +19,8 @@ interface UseResearchReturn {
   citations: Citation[];
   awaitingReview: boolean;
   executeResearch: (query: string, mode?: ResearchMode) => Promise<void>;
+  /** Re-run the last question, replacing its answer. */
+  regenerate: (mode?: ResearchMode) => Promise<void>;
   submitFeedback: (feedback: string, approved: boolean) => Promise<void>;
   clearMessages: () => void;
 }
@@ -31,9 +33,8 @@ export const useResearch = (): UseResearchReturn => {
   const [citations, setCitations] = useState<Citation[]>([]);
   const [awaitingReview, setAwaitingReview] = useState(false);
 
-  const executeResearch = useCallback(async (query: string, mode: ResearchMode = 'auto') => {
-    if (!query.trim()) return;
-
+  /** Ask `query` with `history` as context; the chat becomes `history` + question + answer. */
+  const runQuery = useCallback(async (query: string, mode: ResearchMode, history: Message[]) => {
     setIsLoading(true);
     setError(null);
 
@@ -43,14 +44,14 @@ export const useResearch = (): UseResearchReturn => {
       content: query,
       timestamp: new Date(),
     };
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages([...history, userMessage]);
 
     try {
       const request: ResearchRequest = {
         query,
         mode,
         thread_id: currentThreadId || undefined,
-        messages: messages.slice(-HISTORY_TO_SEND).map((message) => ({
+        messages: history.slice(-HISTORY_TO_SEND).map((message) => ({
           role: message.role,
           content: message.content,
         })),
@@ -84,7 +85,20 @@ export const useResearch = (): UseResearchReturn => {
     } finally {
       setIsLoading(false);
     }
-  }, [currentThreadId, messages]);
+  }, [currentThreadId]);
+
+  const executeResearch = useCallback(async (query: string, mode: ResearchMode = 'auto') => {
+    if (!query.trim()) return;
+    await runQuery(query, mode, messages);
+  }, [runQuery, messages]);
+
+  const regenerate = useCallback(async (mode: ResearchMode = 'auto') => {
+    let lastUserIndex = messages.length - 1;
+    while (lastUserIndex >= 0 && messages[lastUserIndex].role !== 'user') lastUserIndex--;
+    if (lastUserIndex === -1) return;
+    // Drop the last question and its answer, then ask the same question again.
+    await runQuery(messages[lastUserIndex].content, mode, messages.slice(0, lastUserIndex));
+  }, [runQuery, messages]);
 
   const submitFeedback = useCallback(async (feedback: string, approved: boolean) => {
     if (!currentThreadId) return;
@@ -125,6 +139,7 @@ export const useResearch = (): UseResearchReturn => {
     citations,
     awaitingReview,
     executeResearch,
+    regenerate,
     submitFeedback,
     clearMessages,
   };

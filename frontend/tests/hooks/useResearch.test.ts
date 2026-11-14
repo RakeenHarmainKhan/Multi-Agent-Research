@@ -97,6 +97,40 @@ describe('executeResearch', () => {
   });
 });
 
+describe('regenerate', () => {
+  it('re-asks the last question and replaces its answer', async () => {
+    executeResearch
+      .mockResolvedValueOnce({ ...RESPONSE, report: 'answer 1' })
+      .mockResolvedValueOnce({ ...RESPONSE, report: 'answer 2' })
+      .mockResolvedValueOnce({ ...RESPONSE, report: 'answer 2 (regenerated)' });
+    const { result } = renderHook(() => useResearch());
+    await act(() => result.current.executeResearch('first'));
+    await act(() => result.current.executeResearch('second'));
+    await act(() => result.current.regenerate('research'));
+
+    const regenerated = executeResearch.mock.calls[2][0];
+    expect(regenerated.query).toBe('second'); // not "Regenerate previous response"
+    expect(regenerated.mode).toBe('research');
+    // Context excludes the question being regenerated and its old answer
+    expect(regenerated.messages).toEqual([
+      { role: 'user', content: 'first' },
+      { role: 'assistant', content: 'answer 1' },
+    ]);
+    expect(result.current.messages.map((m) => m.content)).toEqual([
+      'first',
+      'answer 1',
+      'second',
+      'answer 2 (regenerated)',
+    ]);
+  });
+
+  it('does nothing when there is no question yet', async () => {
+    const { result } = renderHook(() => useResearch());
+    await act(() => result.current.regenerate());
+    expect(executeResearch).not.toHaveBeenCalled();
+  });
+});
+
 describe('submitFeedback', () => {
   it('does nothing without an active thread', async () => {
     const { result } = renderHook(() => useResearch());

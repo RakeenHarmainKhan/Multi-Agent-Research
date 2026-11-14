@@ -88,6 +88,16 @@ describe('sending', () => {
     expect((await screen.findAllByText(/Network Error/)).length).toBeGreaterThan(0);
   });
 
+  it('Regenerate re-sends the original question, not placeholder text', async () => {
+    render(<ChatInterface />);
+    const user = await send('what is lora');
+    await screen.findByText(/LoRA adds low-rank updates/);
+    await user.click(screen.getByRole('button', { name: 'Regenerate' }));
+    await waitFor(() => expect(executeResearch).toHaveBeenCalledTimes(2));
+    expect(executeResearch.mock.calls[1][0]).toMatchObject({ query: 'what is lora', mode: 'auto' });
+    expect(screen.getAllByText('what is lora')).toHaveLength(1);
+  });
+
   it('clears the conversation', async () => {
     render(<ChatInterface />);
     const user = await send('what is lora');

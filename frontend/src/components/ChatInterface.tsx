@@ -19,6 +19,7 @@ export const ChatInterface: React.FC = () => {
     isLoading,
     error,
     executeResearch,
+    regenerate,
     submitFeedback,
     clearMessages,
     citations: currentCitations,
@@ -147,8 +148,9 @@ export const ChatInterface: React.FC = () => {
                         </button>
                         {idx === messages.length - 1 && (
                           <button
-                            onClick={() => executeResearch('Regenerate previous response', mode)}
-                            className="px-3 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors"
+                            onClick={() => regenerate(mode)}
+                            disabled={isLoading}
+                            className="px-3 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors disabled:opacity-50"
                           >
                             Regenerate
                           </button>
