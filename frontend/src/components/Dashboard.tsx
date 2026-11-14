@@ -3,29 +3,31 @@
  */
 import React, { useEffect, useState } from 'react';
 import { apiService } from '../services/api';
-import { formatDuration } from '../utils/helpers';
-import type { SystemStats } from '../types';
+import { formatCost, formatDuration } from '../utils/helpers';
+import type { HealthStatus, SystemStats } from '../types';
 
 export const Dashboard: React.FC = () => {
   const [stats, setStats] = useState<SystemStats | null>(null);
+  const [health, setHealth] = useState<HealthStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadStats();
-    const interval = setInterval(loadStats, 30000);
+    const load = async () => {
+      const [statsResult, healthResult] = await Promise.allSettled([
+        apiService.getSystemStats(),
+        apiService.checkHealth(),
+      ]);
+      setStats(statsResult.status === 'fulfilled' ? statsResult.value : null);
+      setHealth(healthResult.status === 'fulfilled' ? healthResult.value : null);
+      if (statsResult.status === 'rejected') {
+        console.error('Failed to load stats:', statsResult.reason);
+      }
+      setLoading(false);
+    };
+    load();
+    const interval = setInterval(load, 30000);
     return () => clearInterval(interval);
   }, []);
-
-  const loadStats = async () => {
-    try {
-      const data = await apiService.getSystemStats();
-      setStats(data);
-    } catch (error) {
-      console.error('Failed to load stats:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -57,7 +59,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <MetricCard
           title="Total Queries"
           value={stats.total_queries.toString()}
@@ -67,19 +69,27 @@ export const Dashboard: React.FC = () => {
         <MetricCard
           title="Success Rate"
           value={`${successRate}%`}
-          subtitle={`${stats.successful_queries}/${stats.total_queries}`}
+          subtitle={`${stats.failed_queries} failed`}
           color="green"
         />
         <MetricCard
           title="Avg Latency"
           value={formatDuration(stats.avg_latency)}
-          subtitle="Per query"
+          subtitle="Per completed query"
           color="purple"
         />
         <MetricCard
-          title="Failed Queries"
-          value={stats.failed_queries.toString()}
-          subtitle="Errors tracked"
+          title="Tokens Used"
+          value={stats.total_tokens.toLocaleString('en-US')}
+          subtitle={`${Math.round(stats.avg_tokens_per_query).toLocaleString('en-US')} per query`}
+          color="blue"
+        />
+        <MetricCard
+          title="Est. Cost"
+          value={stats.total_cost === null ? '—' : formatCost(stats.total_cost)}
+          subtitle={
+            stats.total_cost === null ? 'Set LLM pricing in backend .env' : 'From configured pricing'
+          }
           color="red"
         />
       </div>
@@ -90,9 +100,21 @@ export const Dashboard: React.FC = () => {
           System Health
         </h3>
         <div className="space-y-3">
-          <HealthIndicator label="API Server" status="healthy" />
-          <HealthIndicator label="Database" status="down" />
-          <HealthIndicator label="LLM Service" status="healthy" />
+          <HealthIndicator
+            label="API Server"
+            status={health ? 'healthy' : 'down'}
+            text={health ? `Operational · v${health.version}` : 'Unreachable'}
+          />
+          <HealthIndicator
+            label="LLM Service"
+            status={health?.llm_service === 'configured' ? 'healthy' : 'down'}
+            text={health?.llm_service === 'configured' ? 'Configured' : 'Not configured'}
+          />
+          <HealthIndicator
+            label="Storage"
+            status="degraded"
+            text={`${health?.database ?? 'unknown'} (resets on restart)`}
+          />
         </div>
       </div>
     </div>
@@ -135,26 +157,26 @@ const MetricCard: React.FC<MetricCardProps> = ({
 interface HealthIndicatorProps {
   label: string;
   status: 'healthy' | 'degraded' | 'down';
+  text: string;
 }
 
 const HealthIndicator: React.FC<HealthIndicatorProps> = ({
   label,
   status,
+  text,
 }) => {
-  const statusConfig = {
-    healthy: { color: 'bg-green-500', text: 'Operational' },
-    degraded: { color: 'bg-yellow-500', text: 'Degraded' },
-    down: { color: 'bg-red-500', text: 'Down' },
+  const statusColor = {
+    healthy: 'bg-green-500',
+    degraded: 'bg-yellow-500',
+    down: 'bg-red-500',
   };
-
-  const config = statusConfig[status];
 
   return (
     <div className="flex items-center justify-between p-3 bg-slate-800 rounded-lg">
       <span className="text-slate-300">{label}</span>
       <div className="flex items-center gap-2">
-        <div className={`w-2 h-2 rounded-full ${config.color}`} />
-        <span className="text-sm text-slate-400">{config.text}</span>
+        <div className={`w-2 h-2 rounded-full ${statusColor[status]}`} />
+        <span className="text-sm text-slate-400">{text}</span>
       </div>
     </div>
   );

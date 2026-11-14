@@ -47,7 +47,11 @@ class ResearchResponse(BaseModel):
     citations: List[Dict[str, Any]] = Field(default_factory=list)
     sources: List[Dict[str, Any]] = Field(default_factory=list)
     execution_time: Optional[float] = None
-    estimated_cost: Optional[float] = None
+    input_tokens: int = 0
+    output_tokens: int = 0
+    estimated_cost: Optional[float] = Field(
+        None, description="USD; only set when LLM_*_COST_PER_1M_TOKENS are configured"
+    )
 
 
 class SystemStats(BaseModel):
@@ -56,15 +60,16 @@ class SystemStats(BaseModel):
     successful_queries: int
     failed_queries: int
     avg_latency: float
-    total_cost: float
-    active_users: int
+    total_tokens: int
+    avg_tokens_per_query: float
+    total_cost: Optional[float] = None
     queries_today: int
 
 class HealthCheck(BaseModel):
     """API health status."""
     status: str
     version: str
-    uptime: float
+    uptime: float = Field(description="Seconds since the backend process started")
     database: str
-    llm_service: str
+    llm_service: Literal["configured", "not_configured"]
     timestamp: datetime

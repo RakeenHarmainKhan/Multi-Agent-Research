@@ -51,6 +51,14 @@ class Settings(BaseSettings):
     AZURE_OPENAI_CHAT_API_KEY: str = ""
     AZURE_OPENAI_CHAT_DEPLOYMENT: str = ""
     AZURE_OPENAI_CHAT_API_VERSION: str = ""
+    # Optional pricing for cost estimates (USD per 1M tokens). Leave unset to report tokens only.
+    LLM_INPUT_COST_PER_1M_TOKENS: float | None = None
+    LLM_OUTPUT_COST_PER_1M_TOKENS: float | None = None
+
+    @field_validator("LLM_INPUT_COST_PER_1M_TOKENS", "LLM_OUTPUT_COST_PER_1M_TOKENS", mode="before")
+    @classmethod
+    def blank_price_means_unset(cls, v: Any) -> Any:
+        return None if isinstance(v, str) and not v.strip() else v
     MODEL_TEMPERATURE: float = 0.5
     MAX_TOKENS: int = 2000
     TIMEOUT: int = 60

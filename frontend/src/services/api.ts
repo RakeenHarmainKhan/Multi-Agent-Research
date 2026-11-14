@@ -4,6 +4,7 @@
 import axios from 'axios';
 import type { AxiosInstance } from 'axios';
 import type {
+  HealthStatus,
   QueryHistory,
   ResearchRequest,
   ResearchResponse,
@@ -62,8 +63,8 @@ class ApiService {
     return response.data;
   }
 
-  async checkHealth(): Promise<{ status: string }> {
-    const response = await this.client.get('/health');
+  async checkHealth(): Promise<HealthStatus> {
+    const response = await this.client.get<HealthStatus>('/health');
     return response.data;
   }
 }

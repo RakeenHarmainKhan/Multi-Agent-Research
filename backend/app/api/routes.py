@@ -10,20 +10,24 @@ from app.agents.workflow import research_graph
 from app.api.models import FeedbackRequest, HealthCheck, ResearchRequest, ResearchResponse, SystemStats
 from app.core.config import settings
 from app.core.runtime_store import runtime_store
+from app.core.usage import TokenUsageHandler, estimate_cost
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+_PROCESS_START = time.time()
 
 
 @router.post("/research", response_model=ResearchResponse)
 async def execute_research(request: ResearchRequest):
     """Execute the research workflow."""
     thread_id = request.thread_id or str(uuid.uuid4())
+    run_id = str(uuid.uuid4())
     start_time = time.time()
     history_messages = [message.model_dump() for message in request.messages]
+    usage_handler = TokenUsageHandler()
 
     try:
-        config = {"configurable": {"thread_id": thread_id}}
+        config = {"configurable": {"thread_id": thread_id}, "callbacks": [usage_handler]}
         inputs = {
             "messages": history_messages,
             "query": request.query,
@@ -40,6 +44,7 @@ async def execute_research(request: ResearchRequest):
         logger.info("Starting research for thread %s", thread_id)
         final_state = await research_graph.ainvoke(inputs, config=config)
         execution_time = time.time() - start_time
+        usage = usage_handler.summary()
 
         awaiting_review = (
             settings.ENABLE_HUMAN_REVIEW
@@ -50,6 +55,7 @@ async def execute_research(request: ResearchRequest):
 
         runtime_store.save_result(
             {
+                "run_id": run_id,
                 "thread_id": thread_id,
                 "query": request.query,
                 "status": status,
@@ -59,7 +65,12 @@ async def execute_research(request: ResearchRequest):
                 "citations": final_state.get("citations", []),
                 "execution_time": execution_time,
                 "created_at": datetime.now(timezone.utc),
+                **usage,
             }
+        )
+        logger.info(
+            "Run %s finished in %.1fs, tokens in/out %s/%s",
+            run_id, execution_time, usage["input_tokens"], usage["output_tokens"],
         )
 
         return ResearchResponse(
@@ -69,11 +80,13 @@ async def execute_research(request: ResearchRequest):
             citations=final_state.get("citations", []),
             sources=final_state.get("all_sources", []),
             execution_time=execution_time,
+            **usage,
         )
     except Exception as exc:
         logger.error("Research failed: %s", exc, exc_info=True)
         runtime_store.save_result(
             {
+                "run_id": run_id,
                 "thread_id": thread_id,
                 "query": request.query,
                 "status": "failed",
@@ -83,6 +96,7 @@ async def execute_research(request: ResearchRequest):
                 "citations": [],
                 "execution_time": time.time() - start_time,
                 "created_at": datetime.now(timezone.utc),
+                **usage_handler.summary(),
             }
         )
         raise HTTPException(status_code=500, detail=str(exc))
@@ -90,7 +104,7 @@ async def execute_research(request: ResearchRequest):
 
 @router.get("/research/{thread_id}", response_model=ResearchResponse)
 def get_research_result(thread_id: str):
-    """Retrieve a research result by thread ID."""
+    """Retrieve the latest research result for a thread."""
     query = runtime_store.get_result(thread_id)
     if not query:
         raise HTTPException(status_code=404, detail="Research not found")
@@ -102,6 +116,9 @@ def get_research_result(thread_id: str):
         citations=query.get("citations", []),
         sources=query.get("sources", []),
         execution_time=query.get("execution_time"),
+        input_tokens=query.get("input_tokens", 0),
+        output_tokens=query.get("output_tokens", 0),
+        estimated_cost=query.get("estimated_cost"),
     )
 
 
@@ -111,36 +128,46 @@ async def submit_feedback(thread_id: str, request: FeedbackRequest):
     if not settings.ENABLE_HUMAN_REVIEW:
         raise HTTPException(status_code=400, detail="Human review mode is disabled")
 
-    config = {"configurable": {"thread_id": thread_id}}
+    existing = runtime_store.get_result(thread_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Research not found")
+
+    usage_handler = TokenUsageHandler()
+    config = {"configurable": {"thread_id": thread_id}, "callbacks": [usage_handler]}
     research_graph.update_state(
         config,
         {"user_feedback": request.feedback, "approved": request.approved},
     )
     final_state = await research_graph.ainvoke(None, config=config)
 
-    existing = runtime_store.get_result(thread_id)
-    execution_time = existing.get("execution_time") if existing else None
+    # The revision belongs to the same run: add its tokens/cost to the original run's totals.
+    usage = usage_handler.summary()
+    usage["input_tokens"] += existing.get("input_tokens", 0)
+    usage["output_tokens"] += existing.get("output_tokens", 0)
+    usage["estimated_cost"] = estimate_cost(usage["input_tokens"], usage["output_tokens"])
+
+    status = "completed" if final_state.get("approved") else "awaiting_review"
+    execution_time = existing.get("execution_time")
     runtime_store.save_result(
         {
-            "thread_id": thread_id,
-            "query": existing.get("query", "") if existing else "",
-            "status": "completed" if final_state.get("approved") else "awaiting_review",
-            "intent": final_state.get("intent", existing.get("intent", "UNKNOWN") if existing else "UNKNOWN"),
+            **existing,
+            "status": status,
+            "intent": final_state.get("intent", existing.get("intent", "UNKNOWN")),
             "final_report": final_state.get("final_report", ""),
             "sources": final_state.get("all_sources", []),
             "citations": final_state.get("citations", []),
-            "execution_time": execution_time,
-            "created_at": existing.get("created_at", datetime.now(timezone.utc)) if existing else datetime.now(timezone.utc),
+            **usage,
         }
     )
 
     return ResearchResponse(
         thread_id=thread_id,
-        status="completed" if final_state.get("approved") else "awaiting_review",
+        status=status,
         report=final_state.get("final_report", ""),
         citations=final_state.get("citations", []),
         sources=final_state.get("all_sources", []),
         execution_time=execution_time,
+        **usage,
     )
 
 
@@ -162,10 +189,23 @@ def get_query_history(limit: int = 20):
             "status": item["status"],
             "intent": item.get("intent"),
             "execution_time": item.get("execution_time"),
+            "total_tokens": item.get("input_tokens", 0) + item.get("output_tokens", 0),
+            "estimated_cost": item.get("estimated_cost"),
             "created_at": item.get("created_at").isoformat() if item.get("created_at") else None,
         }
         for index, item in enumerate(queries)
     ]
+
+
+def _llm_configured() -> bool:
+    return all(
+        (
+            settings.AZURE_OPENAI_ENDPOINT,
+            settings.AZURE_OPENAI_CHAT_API_KEY,
+            settings.AZURE_OPENAI_CHAT_DEPLOYMENT,
+            settings.AZURE_OPENAI_CHAT_API_VERSION,
+        )
+    )
 
 
 @router.get("/health", response_model=HealthCheck)
@@ -174,8 +214,8 @@ def health_check():
     return HealthCheck(
         status="healthy",
         version=settings.VERSION,
-        uptime=time.time(),
-        database="disabled",
-        llm_service="configured" if settings.AZURE_OPENAI_CHAT_API_KEY else "missing_api_key",
+        uptime=round(time.time() - _PROCESS_START, 1),
+        database="in-memory",
+        llm_service="configured" if _llm_configured() else "not_configured",
         timestamp=datetime.now(timezone.utc),
     )

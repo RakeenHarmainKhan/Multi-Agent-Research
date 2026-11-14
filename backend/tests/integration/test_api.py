@@ -30,8 +30,7 @@ class FakeGraph:
 
 @pytest.fixture
 def client():
-    runtime_store._results.clear()
-    runtime_store._history.clear()
+    runtime_store.clear()
     return TestClient(app)
 
 
@@ -50,6 +49,16 @@ class TestMeta:
     def test_health(self, client):
         body = client.get("/api/v1/health").json()
         assert body["status"] == "healthy"
+        assert body["database"] == "in-memory"
+
+    def test_health_uptime_is_seconds_since_start_not_epoch(self, client):
+        """Regression: uptime used to return time.time() (~1.8e9)."""
+        uptime = client.get("/api/v1/health").json()["uptime"]
+        assert 0 <= uptime < 24 * 3600
+
+    def test_health_reports_llm_not_configured_when_settings_missing(self, client, monkeypatch):
+        monkeypatch.setattr(routes.settings, "AZURE_OPENAI_ENDPOINT", "")
+        assert client.get("/api/v1/health").json()["llm_service"] == "not_configured"
 
 
 class TestResearchEndpoint:
@@ -142,3 +151,67 @@ class TestAdmin:
     def test_history_truncates_long_queries(self, client, graph):
         client.post("/api/v1/research", json={"query": "q" * 300})
         assert client.get("/api/v1/admin/history").json()[0]["query"].endswith("...")
+
+    def test_every_question_in_a_conversation_is_counted(self, client, graph):
+        """Regression: runs were keyed by thread_id, so a whole conversation counted as one query."""
+        client.post("/api/v1/research", json={"query": "first", "thread_id": "chat-1"})
+        client.post("/api/v1/research", json={"query": "follow-up", "thread_id": "chat-1"})
+        assert client.get("/api/v1/admin/stats").json()["total_queries"] == 2
+        history = client.get("/api/v1/admin/history").json()
+        assert [h["query"] for h in history] == ["follow-up", "first"]
+        assert client.get("/api/v1/research/chat-1").json()["status"] == "completed"
+
+
+class TestUsageAccounting:
+    """Runs the REAL graph with a fake chat model that reports token usage."""
+
+    @pytest.fixture
+    def real_graph(self, monkeypatch):
+        import json
+
+        from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+        from langchain_core.messages import AIMessage
+
+        from app.agents import nodes
+
+        def reply(text, i, o):
+            return AIMessage(
+                content=text,
+                usage_metadata={"input_tokens": i, "output_tokens": o, "total_tokens": i + o},
+            )
+
+        replies = iter(
+            [
+                reply(json.dumps({"steps": [{"query": "w", "type": "web"}]}), 100, 20),  # planner
+                reply("Fact [1].", 300, 80),  # writer
+            ]
+        )
+        monkeypatch.setattr(nodes, "_build_llm", lambda state: GenericFakeChatModel(messages=replies))
+
+        class Web:
+            def invoke(self, q):
+                return [{"title": "A", "url": "http://a", "content": "c"}]
+
+        monkeypatch.setattr(nodes, "web_search", Web())
+
+    def test_tokens_from_every_llm_call_are_summed(self, client, real_graph):
+        body = client.post("/api/v1/research", json={"query": "q", "mode": "research"}).json()
+        assert body["input_tokens"] == 400
+        assert body["output_tokens"] == 100
+
+    def test_cost_is_null_without_pricing(self, client, real_graph):
+        body = client.post("/api/v1/research", json={"query": "q", "mode": "research"}).json()
+        assert body["estimated_cost"] is None
+        assert client.get("/api/v1/admin/stats").json()["total_cost"] is None
+
+    def test_cost_uses_configured_pricing(self, client, real_graph, monkeypatch):
+        monkeypatch.setattr(routes.settings, "LLM_INPUT_COST_PER_1M_TOKENS", 2.0)
+        monkeypatch.setattr(routes.settings, "LLM_OUTPUT_COST_PER_1M_TOKENS", 10.0)
+        body = client.post("/api/v1/research", json={"query": "q", "mode": "research"}).json()
+        assert body["estimated_cost"] == pytest.approx(400 / 1e6 * 2 + 100 / 1e6 * 10)
+
+    def test_stats_report_real_tokens(self, client, real_graph):
+        client.post("/api/v1/research", json={"query": "q", "mode": "research"})
+        stats = client.get("/api/v1/admin/stats").json()
+        assert stats["total_tokens"] == 500
+        assert "active_users" not in stats

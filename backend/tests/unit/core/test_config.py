@@ -23,3 +23,19 @@ def test_cors_empty_uses_defaults(monkeypatch):
 
 def test_human_review_flag_off_in_tests():
     assert _settings().ENABLE_HUMAN_REVIEW is False
+
+
+def test_blank_llm_prices_mean_unset(monkeypatch):
+    """Regression: `LLM_INPUT_COST_PER_1M_TOKENS=` (as in .env.example) crashed startup."""
+    monkeypatch.setenv("LLM_INPUT_COST_PER_1M_TOKENS", "")
+    monkeypatch.setenv("LLM_OUTPUT_COST_PER_1M_TOKENS", "  ")
+    s = _settings()
+    assert s.LLM_INPUT_COST_PER_1M_TOKENS is None
+    assert s.LLM_OUTPUT_COST_PER_1M_TOKENS is None
+
+
+def test_llm_prices_parse(monkeypatch):
+    monkeypatch.setenv("LLM_INPUT_COST_PER_1M_TOKENS", "1.25")
+    monkeypatch.setenv("LLM_OUTPUT_COST_PER_1M_TOKENS", "10")
+    s = _settings()
+    assert (s.LLM_INPUT_COST_PER_1M_TOKENS, s.LLM_OUTPUT_COST_PER_1M_TOKENS) == (1.25, 10.0)

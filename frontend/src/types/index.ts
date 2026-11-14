@@ -45,7 +45,9 @@ export interface ResearchResponse {
   citations: Citation[];
   sources: Source[];
   execution_time?: number;
-  estimated_cost?: number;
+  input_tokens?: number;
+  output_tokens?: number;
+  estimated_cost?: number | null;
 }
 
 export interface SystemStats {
@@ -53,9 +55,20 @@ export interface SystemStats {
   successful_queries: number;
   failed_queries: number;
   avg_latency: number;
-  total_cost: number;
-  active_users: number;
+  total_tokens: number;
+  avg_tokens_per_query: number;
+  /** null when LLM pricing isn't configured on the backend */
+  total_cost: number | null;
   queries_today: number;
+}
+
+export interface HealthStatus {
+  status: string;
+  version: string;
+  uptime: number;
+  database: string;
+  llm_service: 'configured' | 'not_configured';
+  timestamp: string;
 }
 
 export interface QueryHistory {
