@@ -1,7 +1,8 @@
 """Application configuration."""
+import re
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, List
+from typing import Any, Dict, List
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -81,5 +82,25 @@ class Settings(BaseSettings):
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
+
+
+def cors_options(origins: List[str]) -> Dict[str, Any]:
+    """
+    Split configured origins into exact matches and wildcard patterns.
+
+    Starlette's `allow_origins` compares strings literally, so an entry like
+    "https://*.vercel.app" never matches anything. Wildcards become an anchored
+    `allow_origin_regex` where `*` matches exactly one subdomain label.
+    """
+    exact = [origin for origin in origins if "*" not in origin or origin == "*"]
+    patterns = [
+        re.escape(origin).replace(r"\*", r"[a-z0-9-]+")
+        for origin in origins
+        if "*" in origin and origin != "*"
+    ]
+    return {
+        "allow_origins": exact,
+        "allow_origin_regex": f"^(?:{'|'.join(patterns)})$" if patterns else None,
+    }
 
 settings = get_settings()

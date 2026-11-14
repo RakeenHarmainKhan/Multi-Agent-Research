@@ -10,6 +10,7 @@ import os
 # Deterministic behaviour regardless of the developer's local .env
 os.environ["TAVILY_API_KEY"] = ""
 os.environ["ENABLE_HUMAN_REVIEW"] = "false"
+os.environ["BACKEND_CORS_ORIGINS"] = "http://localhost:5173,https://*.vercel.app"
 
 from types import SimpleNamespace  # noqa: E402
 
