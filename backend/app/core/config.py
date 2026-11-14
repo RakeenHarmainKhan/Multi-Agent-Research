@@ -51,6 +51,8 @@ class Settings(BaseSettings):
 
     # Research Tools
     TAVILY_API_KEY: str | None = None
+    # Web results Tavily scores below this (0-1) are dropped as off-topic; results without a score are kept.
+    WEB_MIN_SCORE: float = 0.5
 
     # Workflow behavior
     HISTORY_LIMIT: int = 100

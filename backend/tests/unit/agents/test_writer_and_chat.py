@@ -26,7 +26,7 @@ WEB = [
     {"title": "Alpha", "url": "http://alpha", "content": "alpha body", "score": 0.9},
     {"title": "Beta", "url": "http://beta", "content": "beta body", "score": 0.8},
 ]
-ACADEMIC = [{"content": "Published: 2025\nTitle: Paper X\nAuthors: Z", "type": "academic"}]
+ACADEMIC = [{"title": "Paper X", "content": "An abstract about Paper X.", "type": "academic"}]
 
 
 class TestWriter:
@@ -116,6 +116,27 @@ class TestWriterOutput:
         assert out["final_report"].startswith("Error generating report")
         assert out["current_step"] == "completed"
         assert "gateway timeout" in out["error"]
+
+
+class TestWriterFaithfulnessRules:
+    """Rules that keep claims inside the sources (the main driver of 'partly supported' claims)."""
+
+    def test_prompt_forbids_facts_from_memory_and_stacked_citations(self, fake_llm, prompt_text):
+        nodes.writer_node({"query": "q", "web_results": WEB, "academic_results": []})
+        prompt = prompt_text(fake_llm.prompts[0])
+        assert "Do not add numbers, names, results or mechanisms from memory" in prompt
+        assert "one fact per sentence" in prompt.lower()
+
+    def test_prompt_asks_each_part_of_a_multi_part_question_to_be_answered(self, fake_llm, prompt_text):
+        nodes.writer_node({"query": "q", "web_results": WEB, "academic_results": []})
+        prompt = prompt_text(fake_llm.prompts[0])
+        assert "several parts" in prompt and "one ### heading per part" in prompt
+
+    def test_each_source_shows_the_writer_excerpt_length(self, fake_llm, prompt_text):
+        long_web = [{"title": "L", "url": "http://l", "content": "z" * 3000, "score": 0.9}]
+        nodes.writer_node({"query": "q", "web_results": long_web, "academic_results": []})
+        assert ("z" * nodes.WRITER_EXCERPT_CHARS) in prompt_text(fake_llm.prompts[0])
+        assert ("z" * (nodes.WRITER_EXCERPT_CHARS + 1)) not in prompt_text(fake_llm.prompts[0])
 
 
 class TestWriterLinks:

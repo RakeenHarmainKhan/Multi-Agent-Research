@@ -102,3 +102,6 @@ deployment.md
 portfolio.md
 .sentry-native/
 .sentry-release
+backend/evals/results/*.json
+backend/evals/results/*.md
+!backend/evals/results/label_sample.txt

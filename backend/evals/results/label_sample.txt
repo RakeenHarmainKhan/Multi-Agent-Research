@@ -1,0 +1,144 @@
+#1  Q: What are the main techniques for reducing LLM inference cost?
+CLAIM: Recent work on large language model (LLM) inference highlights a complementary toolbox of model-level and system-level techniques that substantially cut memory footprint, latency, and hardware cost while preserving accuracy.[1][2][3][7][8]
+  SOURCE: PagedAttention manages the key-value cache in fixed-size blocks stored non-contiguously, eliminating fragmentation from static over-provisioning and enabling larger batch sizes.
+ Model optimization techniques including quantization, structured sparsity, and knowledge distillation shrink model size and accelerate inference, while serving techniques such as in-flight batching and speculative inference increase GPU utilization and throughput.
+  SOURCE: In conclusion, reducing the inference cost of LLMs is critical for maintaining sustainable and scalable AI operations. Businesses can maximize the efficiency of their AI systems by implementing a combination of these ten strategies: quantization, pruning, knowledge distillation, batching, model compression, early exiting, optimized hardware, caching, prompt engineering, and distributed inference. Careful consideration of these techniques ensures that LLMs remain powerful and cost-effective,
+  SOURCE: Recent advancements: A noteworthy 2024 approach by NVIDIA combined structured pruning with distillation to produce much smaller LLMs without sacrificing performance. Their work on “Minitron” models pruned and distilled a Llama 15B down to 8B and 4B, and reported improved MMLU benchmark scores (by 16%) compared to training a 4B model from scratch, while matching the performance of other state-of-the-art 7B models. This demonstrates that pruning can yield efficient models that outperform
+  SOURCE: Published: 2024-02-20
+Title: WKVQuant: Quantizing Weight and Key/Value Cache for Large Language Models Gains More
+Authors: Yuxuan Yue, Zhihang Yuan, Haojie Duanmu, Sifan Zhou, Jianlong Wu, Liqiang Nie
+Summary: Large Language Models (LLMs) face significant deployment challenges due to their substantial memory requirements and the computational demands of auto-regressive text generation process. This paper addresses these challenges by focusing on the quantization of LLMs, a technique that reduces
+  SOURCE: Published: 2026-04-27
+Title: PolyKV: A Shared Asymmetrically-Compressed KV Cache Pool for Multi-Agent LLM Inference
+Authors: Ishan Patel, Ishan Joshi
+Summary: We present PolyKV, a system in which multiple concurrent inference agents share a single, asymmetrically compressed KV cache pool. Rather than allocating a separate KV cache per agent -- the standard paradigm -- PolyKV writes a compressed cache once and injects it into N independent agent contexts via HuggingFace DynamicCache objects. Comp
+JUDGE SAID: partly  (quote verified: True)  quote: Model optimization techniques including quantization, structured sparsity, and knowledge distillation shrink model size and accelerate inference, whil
+YOUR VERDICT (yes / partly / no): 
+
+#2  Q: What is retrieval-augmented generation and what are its main failure modes?
+CLAIM: Retrieval-augmented generation (RAG) is an architecture that conditions large language or generative models on external retrieved content, aiming to improve factuality, coverage, and adaptability over pure parametric models.[2][4][5][7]
+  SOURCE: Retrieval-augmented generation (RAG) provides entire retrieved passages to the LLM, even though only a handful of spans within them contain the evidence pertaining to the question. While precise selection of these spans can improve context utilization, identifying them in isolation is challenging. A span may appear irrelevant by itself, and deciding whether to retain it may require examining other retrieved information. One can evaluate each span's candidacy with the full retrieved context, [...
+  SOURCE: Published: 2025-11-07
+Title: Engineering the RAG Stack: A Comprehensive Review of the Architecture and Trust Frameworks for Retrieval-Augmented Generation Systems
+Authors: Dean Wampler, Dave Nielson, Alireza Seddighi
+Summary: This article provides a comprehensive systematic literature review of academic studies, industrial applications, and real-world deployments from 2018 to 2025, providing a practical guide and detailed overview of modern Retrieval-Augmented Generation (RAG) architectures. RAG
+  SOURCE: Published: 2025-06-14
+Title: AR-RAG: Autoregressive Retrieval Augmentation for Image Generation
+Authors: Jingyuan Qi, Zhiyang Xu, Qifan Wang, Lifu Huang
+Summary: We introduce Autoregressive Retrieval Augmentation (AR-RAG), a novel paradigm that enhances image generation by autoregressively incorporating knearest neighbor retrievals at the patch level. Unlike prior methods that perform a single, static retrieval before generation and condition the entire generation on fixed reference images, AR-R
+  SOURCE: Published: 2024-12-03
+Title: EVOR: Evolving Retrieval for Code Generation
+Authors: Hongjin Su, Shuyang Jiang, Yuhang Lai, Haoyuan Wu, Boao Shi, Che Liu, Qian Liu, Tao Yu
+Summary: Recently the retrieval-augmented generation (RAG) has been successfully applied in code generation. However, existing pipelines for retrieval-augmented code generation (RACG) employ static knowledge bases with a single source, limiting the adaptation capabili
+JUDGE SAID: partly  (quote verified: True)  quote: Recently the retrieval-augmented generation (RAG) has been successfully applied in code generation. However, existing pipelines for retrieval-augmente
+YOUR VERDICT (yes / partly / no): 
+
+#3  Q: What are current best practices for evaluating LLM agents?
+CLAIM: Current best practices for evaluating LLM agents emphasize a layered approach: starting from text-only assessments of agentic skills, then progressing to environment-grounded benchmarks and application-level evaluation infrastructure.[1][5][6]
+  SOURCE: The first level focuses on evaluating LLMs on agentic skills, such as reasoning, planning, and tool calling, without embedding them in a dynamic environment. Benchmarks in this level provide a textual prompt and expect a textual response. The model’s response is assessed independently of any interaction loop or adaptive environment. Consequently, these evaluations measure whether a model can demonstrate an agentic capability in principle, but they do not assess whether the model can deploy that 
+  SOURCE: AgentBench broadens the environment set and makes the evaluated object a decision-making agent, not a single response . GAIA stresses assistant tasks with files, tools, and multi-step evidence gathering . OSWorld and AndroidWorld move evaluation into operating-system and mobile-app settings where UI grounding, application state, and reset guarantees become part of the benchmark [40,41]. TAU-bench adds simulated users, domain policies, and database state, making success depend on [...] Other plat
+  SOURCE: Combine HELM’s holistic coverage () with dimension-specific complements: HLE for specialized expert knowledge (), MMMU for multimodal evaluation (), and AgentBench for agentic capabilities (). This combination provides breadth while maintaining methodological rigor. For multilingual coverage, supplement with C-Eval (Chinese, ) and OlympiadBench (bilingual English-Chinese, ).
+
+ For Contamination-Resistant Evaluation. [...] No dedicated agentic benchmarks (GAIA, WebArena, AgentBench) appear in the
+JUDGE SAID: partly  (quote verified: False)  quote: The first level focuses on evaluating LLMs on agentic skills, such as reasoning, planning, and tool calling, without embedding them in a dynamic envir
+YOUR VERDICT (yes / partly / no): 
+
+#4  Q: What is speculative decoding and how much speedup does it give?
+CLAIM: Speculative decoding is an inference-time acceleration technique for large language models (LLMs) that uses a fast “draft” process to propose multiple future tokens, which are then verified or corrected by a slower, high-quality “target” model in parallel.[1][3][5]
+  SOURCE: In a live local benchmark using Qwen3 27B on a single Nvidia A100 GPU, running the same five prompts through SGLang, plain autoregressive decoding (no speculative decoding) produced an average of about 29 tokens per second, consistent across prompts. Enabling DFlash 2 speculative decoding on the identical model, prompts, and hardware roughly doubled that, to about 59 tokens per second on average. One prompt reportedly hit around 72 tokens per second, attributed to a long run of correct draft [..
+  SOURCE: distribution of the target model within hardware numerics. We benchmark speculative sampling with Chinchilla, a 70 billion parameter language model, achieving a 2-2.5x decoding speedup in a distributed setup, without compromising the sample quality or making modifications to the model itself. [...] Nucleus sampling (p=0.8): 1.92x speedup (14.1ms/token → 7.52ms/token)
+ Greedy sampling: 2.01x speedup (14.1ms/token → 7.00ms/token)
+
+HumanEval Code Generation Results:
+
+ Nucleus sampling (p=0.95, temp
+  SOURCE: A gif showing a base model (top) using standard autoregressive generation generating a single token in each 200 ms pass, taking 600 ms to generate three. A model with speculative decode (bottom) took slightly longer on one pass (250 ms), but generated three tokens in a single pass.
+
+Figure 4. Generation with and without speculative decoding
+JUDGE SAID: partly  (quote verified: True)  quote: A model with speculative decode (bottom) took slightly longer on one pass (250 ms), but generated three tokens in a single pass.
+YOUR VERDICT (yes / partly / no): 
+
+#5  Q: What are the trade-offs between vector databases for RAG in production?
+CLAIM: Production RAG systems in 2026 face a nuanced trade-off between performance, operational overhead, feature richness, and integration with existing infrastructure when choosing a vector database.[1][2][3][4][5]
+  SOURCE: > On a 1M-vector benchmark, Qdrant hit ~2.1 ms p50 and ~6.3 ms p99 at roughly 1,200 QPS — faster than Pinecone, Weaviate, and pgvector in the same test.
+
+At 50M vectors and 90% recall, Tiger Data’s benchmark measured Qdrant at 4.74 ms p50 and 5.79 ms p99. That’s tight tail latency — exactly what you want for interactive RAG with strict UX budgets.
+
+What makes it stand out: [...] It depends on your deployment model. For managed, Pinecone is the strongest default — fast to deploy, reliable, and wi
+  SOURCE: Pinecone, Weaviate, or Qdrant? The vector database decision in 2026. Here's what matters: → Performance Pinecone: 10K+ QPS, sub-50ms latency Weaviate: 5K QPS, 100ms average Qdrant: 8K QPS, 60ms latency Speed varies by workload. → Filtering & Hybrid Search Pinecone: Metadata filtering, no native hybrid Weaviate: Full hybrid search built-in Qdrant: Advanced filtering, hybrid support Search needs define the winner. → Pricing Models Pinecone: Pay per query, scales fast Weaviate: Open source, cloud
+  SOURCE: The performance case used to be weak. Earlier versions of `pgvector` were adequate for small datasets but couldn't compete with specialized vector databases. That changed with `pgvectorscale` from Timescale. Recent benchmarks show 471 QPS at 99% recall on 50 million vectors, which is 11.4 times better than Qdrant and competitive with Pinecone's specialized infrastructure. The p95 latency is 28 times lower than Pinecone s1 at 99% recall. [...] Write-heavy patterns matter more in 2026 than they di
+  SOURCE: ### Vector index
+
+ Stack: Postgres + pgvector up to ~100M vectors, or managed vector DB (Qdrant, Pinecone) for larger deployments.
+ Metadata: store `tenant_id`, `source_id`, `chunk_id`, embeddings, tags, timestamps.
+ Isolation: namespace by tenant or enforce filters at query time (prefer both).
+ Maintenance: monitor dimensionality drift when models change; re-embed proactively.
+
+### Keyword index [...] Each phase ends with documented tests, metrics, and runbooks. Investors and enterprise buyers 
+  SOURCE: It depends on scale, infrastructure, and requirements. pgvector + Supabase (our default in 2026) — when you’re already on Postgres, want one database to manage, and your scale is in the 1–10M range where most apps live. Pinecone — fully managed, ideal for teams that want zero ops overhead. Qdrant — best price-performance self-hosted, best-in-class filtering. Weaviate — best hybrid search natively, schema-rich, multi-tenancy improvements in 1.28. Milvus — billion-vector workloads with mature [...
+JUDGE SAID: yes  (quote verified: False)  quote: It depends on scale, infrastructure, and requirements. pgvector + Supabase (our default in 2026) — when you’re already on Postgres, want one database 
+YOUR VERDICT (yes / partly / no): 
+
+#6  Q: What is direct preference optimization and how does it compare to RLHF?
+CLAIM: Direct Preference Optimization (DPO) is a post-training alignment method for large language models that directly optimizes model parameters against human preference comparisons, bypassing an explicit reward model and online reinforcement learning. [1][2]
+  SOURCE: RLHF and DPO have entered the practitioner vocabulary. Nowadays, reinforcement learning from human feedback (PPO-based), along with direct preference optimization, is the norm when fine-tuning LLMs to behave in a certain way. You will come across both of these methods if you do work with language models. The reason for DPO gaining traction is its simplicity compared to RLHF. [...] The Proximal Policy Optimization (PPO) technique is the leading algorithm in this category in 2026. It’s the techniq
+  SOURCE: Training stage: A model released straight out of pretraining is marked "Base". A model finetuned to follow instructions is marked "Instruct", "Chat", or "it" (instruction-tuned). A model finetuned generically is marked "SFT". Similarly for "RLHF" (reinforcement learning from human feedback) or "DPO" (direct preference optimization). For example, Mistral-7B-Instruct-v0.2, Llama-2-7b-chat, Gemma-2-9b-it. [...] RLHF involves training a reward model to predict which text humans prefer. Then, the LLM
+JUDGE SAID: partly  (quote verified: True)  quote: Similarly for "RLHF" (reinforcement learning from human feedback) or "DPO" (direct preference optimization).
+YOUR VERDICT (yes / partly / no): 
+
+#7  Q: How do state space models like Mamba compare to transformers?
+CLAIM: Vision Transformers currently outperform hybrid Mamba-based models in challenging out-of-distribution image recognition, while compact Mamba architectures show strong promise for structured temporal data like limit order books. [1][3]
+  SOURCE: deployed in an out-of-distribution transfer test on a novel, locally captured Indian Bird Species Dataset, the standard Vision Transformer architecture surpassed MambaVision and all convolutional counterparts, registering an overall accuracy of 74.07 percent compared to MambaVision’s 66.52 percent and DenseNet201’s 47.99 percent. [...] MambaVision. All twelve models were initialized with publicly available ImageNet-1K pre-trained weights from HuggingFace Transformers or the timm library and fine
+  SOURCE: Our study leverages a state-space model using the Mamba-3 architecture (Lahoti et al., 2026). We select an efficient variant with 8.2M parameters, a residual-stream width of dmodel=256d\_{\text{model}}=256, and 13 SSM layers, trained autoregressively on the tokenized message stream. To make probing for book statistics meaningful, the model receives only the message stream and is never given the order book as input. Despite its small parameter count and the absence of any book input, this model [
+JUDGE SAID: partly  (quote verified: True)  quote: deployed in an out-of-distribution transfer test on a novel, locally captured Indian Bird Species Dataset, the standard Vision Transformer architectur
+YOUR VERDICT (yes / partly / no): 
+
+#8  Q: How is synthetic data used to train LLMs and what are the risks?
+CLAIM: Synthetic data—artificially generated text, code, images, or videos—is increasingly used to supplement scarce high‑quality human data for training large language models (LLMs) and related AI systems.[2][3][7]
+  SOURCE: AI systems generate synthetic training data for the next generation of models. This partially addresses the ‘data wall’ — the exhaustion of available high-quality human-generated training data.
+
+   4Tool Development Days–Weeks AI systems creating their own scaffolding and tools Early experiments
+  SOURCE: While there, he worked alongside other researchers to understand the fail points of models hosted on cloud computing infrastructure and offer specific solutions, he said. He also created “synthetic” data which, unlike human-created writing or code, is generated artificially before being reused as training material for the LLMs, Raj said. [...] “It’s very hard to collect data which trains the model to be better than humans,because there are very few humans who can create that data,” Raj said. “Yo
+  SOURCE: Published: 2021-04-23
+Title: Ensembles of GANs for synthetic training data generation
+Authors: Gabriel Eilertsen, Apostolia Tsirikoglou, Claes Lundström, Jonas Unger
+Summary: Insufficient training da
+JUDGE SAID: partly  (quote verified: True)  quote: AI systems generate synthetic training data for the next generation of models. This partially addresses the ‘data wall’ — the exhaustion of available 
+YOUR VERDICT (yes / partly / no): 
+
+#9  Q: What are best practices for chunking documents in RAG pipelines?
+CLAIM: Smaller chunks (about 128–256 tokens) improve precise factual retrieval, while larger chunks (about 512–1024 tokens) better preserve extended context but may introduce more noise.[1][2]
+  SOURCE: chunk\_size: The size of document chunks in tokens. Smaller chunks (128-256 tokens) are better for precise factual retrieval; larger chunks (512-1024 tokens) preserve more context and work better for questions requiring understanding of extended passages.
+ chunk\_overlap: The number of tokens that adjacent chunks share. Overlap of 10-20 percent reduces the chance of splitting relevant content across chunk boundaries at the cost of some index redundancy. [...] would receive incomplete, potentiall
+  SOURCE: Before retrieval, raw documents must be split into chunks for effective searching. Chunk size, overlap strategy, where a small portion from the end of one chunk starts the next to maintain context, and document structure all affect retrieval accuracy. Smaller chunks improve precision but lose context, while larger chunks preserve context but add noise.
+
+### Embedding Generation [...] RAG is not static. As data and user behavior evolve, retrieval quality can silently degrade. Without continuous e
+JUDGE SAID: yes  (quote verified: False)  quote: Smaller chunks (128-256 tokens) are better for precise factual retrieval; larger chunks (512-1024 tokens) preserve more context and work better for qu
+YOUR VERDICT (yes / partly / no): 
+
+#10  Q: What is the current evidence on scaling laws for language models?
+CLAIM: Kaplan (2020) and Chinchilla (Hoffmann et al., 2022) derive different optimal allocations of parameters $N$ and tokens $D$ for a given compute budget $C$, motivating work to reconcile their scaling prescriptions for next-token prediction transformers.[4]
+  SOURCE: Published: 2024-11-21
+Title: Reconciling Kaplan and Chinchilla Scaling Laws
+Authors: Tim Pearce, Jinyeop Song
+Summary: Kaplan et al. [2020] (`Kaplan') and Hoffmann et al. [2022] (`Chinchilla') studied the scaling behavior of transformers trained on next-token language prediction. These studies produced different estimates for how the number of parameters ($N$) and training tokens ($D$) should be set to achieve the lowest possible loss for a given compute budget ($C$). Kaplan: $N_\text{optimal} \
+JUDGE SAID: yes  (quote verified: True)  quote: Kaplan et al. [2020] (`Kaplan') and Hoffmann et al. [2022] (`Chinchilla') studied the scaling behavior of transformers trained on next-token language 
+YOUR VERDICT (yes / partly / no): 
+
+#11  Q: What are the main approaches to watermarking LLM output?
+CLAIM: A core design is to bias token sampling toward a secret “green list” keyed by a cryptographic secret, producing detectable deviations in token frequencies without significantly harming utility.[4]
+  SOURCE: Published: 2024-05-01
+Title: A Watermark for Large Language Models
+Authors: John Kirchenbauer, Jonas Geiping, Yuxin Wen, Jonathan Katz, Ian Miers, Tom Goldstein
+Summary: Potential harms of large language models can be mitigated by watermarking model output, i.e., embedding signals into generated text that are invisible to humans but algorithmically detectable from a short span of tokens. We propose a watermarking framework for proprietary language models. The watermark can be embedded with negli
+JUDGE SAID: partly  (quote verified: True)  quote: We propose a watermarking framework for proprietary language models. The watermark can be embedded with negli
+YOUR VERDICT (yes / partly / no): 
+
+#12  Q: What techniques exist for compressing LLMs through pruning and distillation?
+CLAIM: Depth/block pruning for inference efficiency:** IG-Pruning introduces input-guided block (layer) pruning, dynamically removing transformer layers based on the input to reduce inference cost, advancing beyond fixed-depth pruning strategies for LLMs.[4]
+  SOURCE: Published: 2025-11-04
+Title: IG-Pruning: Input-Guided Block Pruning for Large Language Models
+Authors: Kangyu Qiao, Shaolei Zhang, Yang Feng
+Summary: With the growing computational demands of large language models (LLMs), efficient inference has become increasingly critical for practical deployment. Depth pruning has emerged as a promising approach for reducing the computational costs of large language models by removing transformer layers. However, existing methods typically rely on fixed block
+JUDGE SAID: partly  (quote verified: True)  quote: Depth pruning has emerged as a promising approach for reducing the computational costs of large language models by removing transformer layers. Howeve
+YOUR VERDICT (yes / partly / no): 

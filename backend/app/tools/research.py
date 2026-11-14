@@ -28,7 +28,6 @@ class _MockSearchTool:
                     "TAVILY_API_KEY is configured. "
                     f"Original query: {query}"
                 ),
-                "score": 0.0,
             }
         ]
 
@@ -91,9 +90,7 @@ def number_sources(
     for item in web_results:
         sources.append({**item, "id": len(sources) + 1, "type": "web"})
     for item in academic_results:
-        match = re.search(r"Title:\s*(.+)", item.get("content", ""))
-        title = match.group(1).strip() if match else "Academic paper"
-        sources.append({**item, "id": len(sources) + 1, "type": "academic", "title": title})
+        sources.append({**item, "id": len(sources) + 1, "type": "academic", "title": item.get("title", "Academic paper")})
     return sources
 
 

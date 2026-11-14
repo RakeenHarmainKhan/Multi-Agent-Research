@@ -7,7 +7,7 @@ def _sources():
             {"title": "A", "url": "http://a", "content": "alpha"},
             {"title": "B", "url": "http://b", "content": "beta"},
         ],
-        [{"content": "Published: 2025\nTitle: Paper X\nAuthors: Z", "type": "academic"}],
+        [{"title": "Paper X", "content": "An abstract.", "type": "academic"}],
     )
 
 

@@ -227,3 +227,39 @@ class TestPlanner:
         fake_llm.reply = json.dumps({"steps": [{"query": "  ", "type": "web"}]})
         out = nodes.planner_node({"query": "lora", "messages": []})
         assert out["plan"] == [{"query": "lora", "type": "web"}]
+
+class TestPlanShape:
+    ALLOWED_BOTH = ["web", "academic"]
+
+    def test_only_one_arxiv_search_is_kept(self):
+        steps = [
+            {"query": "a", "type": "academic"},
+            {"query": "b", "type": "web"},
+            {"query": "c", "type": "academic"},
+        ]
+        plan = nodes._normalize_plan(steps, self.ALLOWED_BOTH, "q")
+        assert plan == [{"query": "a", "type": "academic"}, {"query": "b", "type": "web"}]
+
+    def test_several_web_steps_are_all_kept(self):
+        steps = [{"query": f"w{i}", "type": "web"} for i in range(3)]
+        assert len(nodes._normalize_plan(steps, self.ALLOWED_BOTH, "q")) == 3
+
+    def test_a_disallowed_academic_step_converted_to_web_does_not_count_as_arxiv(self):
+        steps = [{"query": "a", "type": "academic"}, {"query": "b", "type": "academic"}]
+        plan = nodes._normalize_plan(steps, ["web"], "q")
+        assert [s["type"] for s in plan] == ["web", "web"]
+
+    def test_planner_drops_extra_arxiv_steps_end_to_end(self, fake_llm):
+        fake_llm.reply = json.dumps(
+            {"steps": [{"query": "p1", "type": "academic"}, {"query": "p2", "type": "academic"}, {"query": "w", "type": "web"}]}
+        )
+        out = nodes.planner_node({"query": "q", "messages": [], "requires_web": True, "requires_academic": True})
+        assert [s["type"] for s in out["plan"]] == ["academic", "web"]
+
+    def test_prompt_asks_for_specific_queries_covering_every_part_and_limits_arxiv(self, fake_llm, prompt_text):
+        fake_llm.reply = json.dumps({"steps": [{"query": "a", "type": "web"}]})
+        nodes.planner_node({"query": "q", "messages": [], "requires_web": True, "requires_academic": True})
+        prompt = prompt_text(fake_llm.prompts[0])
+        assert "several parts" in prompt and "at least one query" in prompt
+        assert "specific and self-contained" in prompt and "pronouns" in prompt
+        assert "at most once" in prompt and "practical questions" in prompt
