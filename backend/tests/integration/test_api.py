@@ -237,3 +237,48 @@ class TestUsageAccounting:
         stats = client.get("/api/v1/admin/stats").json()
         assert stats["total_tokens"] == 500
         assert "active_users" not in stats
+
+
+class TestRunIsolationWithinAThread:
+    """Real graph + checkpointer: consecutive questions in one thread must not share outputs."""
+
+    @pytest.fixture
+    def real_graph(self, monkeypatch, llm_response):
+        import json
+
+        from app.agents import nodes
+
+        def fake_llm(state, prompt_messages):
+            system = str(prompt_messages[0].content)
+            if "Break down the research query" in system:
+                return llm_response(json.dumps({"steps": [{"query": "w", "type": "web"}]}))
+            if "research summary" in system:
+                return llm_response("Fact [1].")
+            if "ONLY respond to queries related to Artificial Intelligence" in system:
+                return llm_response(
+                    json.dumps(
+                        {"intent": "CHAT", "requires_academic": False, "requires_web": False, "reasoning": "r"}
+                    )
+                )
+            return llm_response("Plain chat answer.")
+
+        class Web:
+            def invoke(self, q):
+                return [{"title": "A", "url": "http://a", "content": "c"}]
+
+        monkeypatch.setattr(nodes, "_invoke_with_llm", fake_llm)
+        monkeypatch.setattr(nodes, "web_search", Web())
+
+    def test_chat_after_research_has_no_stale_sources(self, client, real_graph):
+        """Regression: the chat answer inherited the previous research answer's citations."""
+        first = client.post(
+            "/api/v1/research", json={"query": "q1", "mode": "research", "thread_id": "iso-1"}
+        ).json()
+        assert first["citations"]
+
+        second = client.post(
+            "/api/v1/research", json={"query": "hi", "mode": "auto", "thread_id": "iso-1"}
+        ).json()
+        assert second["report"] == "Plain chat answer."
+        assert second["citations"] == []
+        assert second["sources"] == []

@@ -17,6 +17,20 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 _PROCESS_START = time.time()
 
+_FRESH_RUN_STATE: Dict[str, Any] = {
+    "intent": "",
+    "requires_academic": False,
+    "requires_web": True,
+    "plan": [],
+    "web_results": [],
+    "academic_results": [],
+    "all_sources": [],
+    "final_report": "",
+    "citations": [],
+    "error": "",
+    "current_step": "",
+}
+
 
 @router.post("/research", response_model=ResearchResponse)
 async def execute_research(request: ResearchRequest):
@@ -30,6 +44,10 @@ async def execute_research(request: ResearchRequest):
     try:
         config = {"configurable": {"thread_id": thread_id}, "callbacks": [usage_handler]}
         inputs = {
+            # Per-run outputs must be reset: the checkpointer keeps state per thread_id and
+            # only overwrites keys we send, so a chat answer would otherwise inherit the
+            # previous research answer's sources and citations.
+            **_FRESH_RUN_STATE,
             "messages": history_messages,
             "query": request.query,
             "thread_id": thread_id,
