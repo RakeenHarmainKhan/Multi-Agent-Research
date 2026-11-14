@@ -73,6 +73,7 @@ export interface HealthStatus {
 
 export interface QueryHistory {
   id: number;
+  run_id: string;
   thread_id: string;
   query: string;
   status: string;

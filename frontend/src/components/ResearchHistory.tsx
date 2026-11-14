@@ -220,7 +220,7 @@ export const ResearchHistory: React.FC = () => {
                   onClick={async () => {
                     setLoading(true);
                     try {
-                      const result = await apiService.getResearchResult(item.thread_id);
+                      const result = await apiService.getRun(item.run_id);
                       setSelectedReport({
                         ...item,
                         report: result.report

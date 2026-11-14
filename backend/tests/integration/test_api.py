@@ -161,6 +161,22 @@ class TestAdmin:
         assert [h["query"] for h in history] == ["follow-up", "first"]
         assert client.get("/api/v1/research/chat-1").json()["status"] == "completed"
 
+    def test_each_history_entry_opens_its_own_report(self, client, monkeypatch):
+        """Two questions in one thread must not both open the latest report."""
+        fake = FakeGraph()
+        monkeypatch.setattr(routes, "research_graph", fake)
+        fake.state = {**fake.state, "final_report": "first report"}
+        client.post("/api/v1/research", json={"query": "first", "thread_id": "chat-1"})
+        fake.state = {**fake.state, "final_report": "second report"}
+        client.post("/api/v1/research", json={"query": "second", "thread_id": "chat-1"})
+
+        history = client.get("/api/v1/admin/history").json()
+        reports = {h["query"]: client.get(f"/api/v1/runs/{h['run_id']}").json()["report"] for h in history}
+        assert reports == {"first": "first report", "second": "second report"}
+
+    def test_unknown_run_is_404(self, client):
+        assert client.get("/api/v1/runs/nope").status_code == 404
+
 
 class TestUsageAccounting:
     """Runs the REAL graph with a fake chat model that reports token usage."""

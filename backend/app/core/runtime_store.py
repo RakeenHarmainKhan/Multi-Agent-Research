@@ -46,6 +46,11 @@ class RuntimeStore:
             result = self._runs.get(run_id) if run_id else None
             return dict(result) if result else None
 
+    def get_run(self, run_id: str) -> Dict[str, Any] | None:
+        with self._lock:
+            result = self._runs.get(run_id)
+            return dict(result) if result else None
+
     def list_history(self, limit: int = 20) -> List[Dict[str, Any]]:
         with self._lock:
             return [dict(self._runs[run_id]) for run_id in list(self._history)[:limit] if run_id in self._runs]

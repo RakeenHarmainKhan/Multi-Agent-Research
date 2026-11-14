@@ -46,6 +46,12 @@ class ApiService {
     return response.data;
   }
 
+  /** One specific question's result; a conversation thread can contain several runs. */
+  async getRun(runId: string): Promise<ResearchResponse> {
+    const response = await this.client.get<ResearchResponse>(`/runs/${runId}`);
+    return response.data;
+  }
+
   async submitFeedback(threadId: string, feedback: FeedbackRequest): Promise<ResearchResponse> {
     const response = await this.client.post<ResearchResponse>(`/research/${threadId}/feedback`, feedback);
     return response.data;

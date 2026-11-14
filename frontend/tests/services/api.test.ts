@@ -41,6 +41,12 @@ describe('ApiService', () => {
     expect(client.get).toHaveBeenCalledWith('/research/abc');
   });
 
+  it('getRun fetches one run by id', async () => {
+    client.get.mockResolvedValue({ data: { thread_id: 'abc' } });
+    await apiService.getRun('run-1');
+    expect(client.get).toHaveBeenCalledWith('/runs/run-1');
+  });
+
   it('submitFeedback posts to the feedback route', async () => {
     client.post.mockResolvedValue({ data: {} });
     await apiService.submitFeedback('abc', { feedback: 'x', approved: true });

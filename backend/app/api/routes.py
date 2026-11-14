@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import logging
 import time
 import uuid
+from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
 
@@ -102,24 +103,36 @@ async def execute_research(request: ResearchRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+def _to_response(record: Dict[str, Any]) -> ResearchResponse:
+    return ResearchResponse(
+        thread_id=record["thread_id"],
+        status=record["status"],
+        report=record.get("final_report"),
+        citations=record.get("citations", []),
+        sources=record.get("sources", []),
+        execution_time=record.get("execution_time"),
+        input_tokens=record.get("input_tokens", 0),
+        output_tokens=record.get("output_tokens", 0),
+        estimated_cost=record.get("estimated_cost"),
+    )
+
+
 @router.get("/research/{thread_id}", response_model=ResearchResponse)
 def get_research_result(thread_id: str):
     """Retrieve the latest research result for a thread."""
-    query = runtime_store.get_result(thread_id)
-    if not query:
+    record = runtime_store.get_result(thread_id)
+    if not record:
         raise HTTPException(status_code=404, detail="Research not found")
+    return _to_response(record)
 
-    return ResearchResponse(
-        thread_id=query["thread_id"],
-        status=query["status"],
-        report=query.get("final_report"),
-        citations=query.get("citations", []),
-        sources=query.get("sources", []),
-        execution_time=query.get("execution_time"),
-        input_tokens=query.get("input_tokens", 0),
-        output_tokens=query.get("output_tokens", 0),
-        estimated_cost=query.get("estimated_cost"),
-    )
+
+@router.get("/runs/{run_id}", response_model=ResearchResponse)
+def get_run(run_id: str):
+    """Retrieve one specific question's result (a thread can contain many runs)."""
+    record = runtime_store.get_run(run_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return _to_response(record)
 
 
 @router.post("/research/{thread_id}/feedback", response_model=ResearchResponse)
@@ -184,6 +197,7 @@ def get_query_history(limit: int = 20):
     return [
         {
             "id": index + 1,
+            "run_id": item["run_id"],
             "thread_id": item["thread_id"],
             "query": item["query"][:100] + "..." if len(item["query"]) > 100 else item["query"],
             "status": item["status"],
