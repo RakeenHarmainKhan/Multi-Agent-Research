@@ -8,10 +8,10 @@ from typing import Any, Dict
 from fastapi import APIRouter, HTTPException
 
 from app.agents.workflow import research_graph
-from app.api.models import FeedbackRequest, HealthCheck, ResearchRequest, ResearchResponse, SystemStats
+from app.api.models import HealthCheck, ResearchRequest, ResearchResponse, SystemStats
 from app.core.config import settings
 from app.core.runtime_store import runtime_store
-from app.core.usage import TokenUsageHandler, estimate_cost
+from app.core.usage import TokenUsageHandler
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -67,9 +67,6 @@ async def execute_research(request: ResearchRequest):
             "query": request.query,
             "thread_id": thread_id,
             "mode": request.mode,
-            "user_feedback": request.user_feedback or "",
-            "revision_count": 0,
-            "approved": not settings.ENABLE_HUMAN_REVIEW,
             "start_time": start_time,
         }
 
@@ -78,16 +75,11 @@ async def execute_research(request: ResearchRequest):
         execution_time = time.time() - start_time
         usage = usage_handler.summary()
 
-        awaiting_review = (
-            settings.ENABLE_HUMAN_REVIEW
-            and final_state.get("current_step") == "review"
-            and not final_state.get("approved", False)
-        )
         record = {
             "run_id": run_id,
             "thread_id": thread_id,
             "query": request.query,
-            "status": "awaiting_review" if awaiting_review else "completed",
+            "status": "completed",
             "intent": final_state.get("intent", "UNKNOWN"),
             "final_report": final_state.get("final_report", ""),
             "sources": final_state.get("all_sources", []),
@@ -137,43 +129,6 @@ def get_run(run_id: str):
     record = runtime_store.get_run(run_id)
     if not record:
         raise HTTPException(status_code=404, detail="Run not found")
-    return _to_response(record)
-
-
-@router.post("/research/{thread_id}/feedback", response_model=ResearchResponse)
-async def submit_feedback(thread_id: str, request: FeedbackRequest):
-    """Resume workflow with human feedback when review mode is enabled."""
-    if not settings.ENABLE_HUMAN_REVIEW:
-        raise HTTPException(status_code=400, detail="Human review mode is disabled")
-
-    existing = runtime_store.get_result(thread_id)
-    if not existing:
-        raise HTTPException(status_code=404, detail="Research not found")
-
-    usage_handler = TokenUsageHandler()
-    config = {"configurable": {"thread_id": thread_id}, "callbacks": [usage_handler]}
-    research_graph.update_state(
-        config,
-        {"user_feedback": request.feedback, "approved": request.approved},
-    )
-    final_state = await research_graph.ainvoke(None, config=config)
-
-    # The revision belongs to the same run: add its tokens/cost to the original run's totals.
-    usage = usage_handler.summary()
-    usage["input_tokens"] += existing.get("input_tokens", 0)
-    usage["output_tokens"] += existing.get("output_tokens", 0)
-    usage["estimated_cost"] = estimate_cost(usage["input_tokens"], usage["output_tokens"])
-
-    record = {
-        **existing,
-        "status": "completed" if final_state.get("approved") else "awaiting_review",
-        "intent": final_state.get("intent", existing.get("intent", "UNKNOWN")),
-        "final_report": final_state.get("final_report", ""),
-        "sources": final_state.get("all_sources", []),
-        "citations": final_state.get("citations", []),
-        **usage,
-    }
-    runtime_store.save_result(record)
     return _to_response(record)
 
 

@@ -1,5 +1,5 @@
 /**
- * Chat state and API calls for the research workflow (ask, regenerate, review feedback).
+ * Chat state and API calls for the research workflow (ask, regenerate).
  */
 import { useState, useCallback } from 'react';
 import { apiService } from '../services/api';
@@ -14,11 +14,9 @@ interface UseResearchReturn {
   error: string | null;
   currentThreadId: string | null;
   citations: Citation[];
-  awaitingReview: boolean;
   executeResearch: (query: string, mode?: ResearchMode) => Promise<void>;
   /** Re-run the last question, replacing its answer. */
   regenerate: (mode?: ResearchMode) => Promise<void>;
-  submitFeedback: (feedback: string, approved: boolean) => Promise<void>;
   clearMessages: () => void;
 }
 
@@ -28,7 +26,6 @@ export const useResearch = (): UseResearchReturn => {
   const [error, setError] = useState<string | null>(null);
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
   const [citations, setCitations] = useState<Citation[]>([]);
-  const [awaitingReview, setAwaitingReview] = useState(false);
 
   const appendAssistant = useCallback((content: string) => {
     setMessages((prev) => [...prev, { role: 'assistant', content, timestamp: new Date() }]);
@@ -53,7 +50,6 @@ export const useResearch = (): UseResearchReturn => {
       // Store thread ID for conversation continuity
       setCurrentThreadId(response.thread_id);
       setCitations(response.citations || []);
-      setAwaitingReview(response.status === 'awaiting_review');
       appendAssistant(response.report || 'Research completed but no report generated.');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Research failed';
@@ -77,24 +73,6 @@ export const useResearch = (): UseResearchReturn => {
     await runQuery(messages[lastUserIndex].content, mode, messages.slice(0, lastUserIndex));
   }, [runQuery, messages]);
 
-  const submitFeedback = useCallback(async (feedback: string, approved: boolean) => {
-    if (!currentThreadId) return;
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const response = await apiService.submitFeedback(currentThreadId, { feedback, approved });
-      setCurrentThreadId(response.thread_id);
-      setCitations(response.citations || []);
-      setAwaitingReview(response.status === 'awaiting_review');
-      appendAssistant(response.report || 'Research updated.');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Feedback failed');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentThreadId, appendAssistant]);
-
   const clearMessages = useCallback(() => {
     setMessages([]);
     setCurrentThreadId(null);
@@ -108,10 +86,8 @@ export const useResearch = (): UseResearchReturn => {
     error,
     currentThreadId,
     citations,
-    awaitingReview,
     executeResearch,
     regenerate,
-    submitFeedback,
     clearMessages,
   };
 };

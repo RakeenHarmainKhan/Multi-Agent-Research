@@ -32,13 +32,12 @@ export interface ResearchRequest {
   query: string;
   thread_id?: string;
   mode?: ResearchMode;
-  user_feedback?: string;
   messages?: Array<Pick<Message, 'role' | 'content'>>;
 }
 
 export interface ResearchResponse {
   thread_id: string;
-  status: 'processing' | 'awaiting_review' | 'completed' | 'failed';
+  status: 'processing' | 'completed' | 'failed';
   report?: string;
   citations: Citation[];
   sources: Source[];
@@ -81,10 +80,5 @@ export interface QueryHistory {
 }
 
 
-
-export interface FeedbackRequest {
-  feedback: string;
-  approved: boolean;
-}
 
 export type TabType = 'chat' | 'dashboard' | 'history' | 'settings';

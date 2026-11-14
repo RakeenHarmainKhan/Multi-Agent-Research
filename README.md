@@ -6,7 +6,6 @@ MARA is a high-performance, agentic research platform built on **LangGraph**, **
 - **Agentic Orchestration**: Uses a state-based graph to manage complex research lifecycles.
 - **Academic Grounding**: Direct integration with Arxiv for peer-reviewed AI insights.
 - **Parallel Synthesis**: Concurrent tool execution reduces research latency by up to 60%.
-- **Human-in-the-Loop**: Optional review node for expert-verified report generation.
 
 ## Demonstration
 ![MARA Research Interface](img/interface_preview.png)
@@ -16,7 +15,6 @@ MARA is a high-performance, agentic research platform built on **LangGraph**, **
 - **Parallel Multi-Agent Execution**: Orchestrates multiple LLM-powered agents to plan and execute research in parallel.
 - **Deep Academic Integration**: Leverages Arxiv API for grounded, scientific AI insights.
 - **Concise Citations**: Enforces strict grounding with authentic, verifiable sources.
-- **Human-in-the-Loop**: Optional review node allowing experts to refine reports before final publication.
 - **Stateless Architecture**: Designed for modern cloud environments like Vercel and Render.
 
 
@@ -39,9 +37,7 @@ graph TD
     WebSearch --> Writer["Writer Node"]
     AcademicSearch --> Writer
     
-    Writer --> HumanReview{"Human In The Loop"}
-    HumanReview -->|Revise| Writer
-    HumanReview -->|Approve/Auto| Output["Markdown Generation"]
+    Writer --> Output["Markdown Report"]
 ```
 
 ## Project Structure

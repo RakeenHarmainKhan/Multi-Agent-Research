@@ -35,7 +35,7 @@ class TestWriter:
         assert out["final_report"] == "Claim [1] and more [2]."
         assert [c["id"] for c in out["citations"]] == [1, 2]
         assert [s["id"] for s in out["all_sources"]] == [1, 2, 3]
-        assert out["current_step"] == "review"
+        assert out["current_step"] == "completed"
 
     def test_prompt_lists_every_source_with_its_number(self, fake_llm, prompt_text):
         nodes.writer_node({"query": "q", "web_results": WEB, "academic_results": ACADEMIC})
@@ -110,19 +110,6 @@ class TestWriterOutput:
         assert out["citations"] == []
         assert "[1]" not in out["final_report"]
 
-    def test_revision_feedback_is_included(self, fake_llm, prompt_text):
-        nodes.writer_node(
-            {
-                "query": "q",
-                "web_results": WEB,
-                "academic_results": [],
-                "revision_count": 1,
-                "user_feedback": "make it shorter",
-            }
-        )
-        prompt = prompt_text(fake_llm.prompts[0])
-        assert "REVISION REQUEST #1" in prompt and "make it shorter" in prompt
-
     def test_llm_failure_returns_error_report(self, fake_llm):
         fake_llm.error = RuntimeError("gateway timeout")
         out = nodes.writer_node({"query": "q", "web_results": WEB, "academic_results": []})
@@ -154,25 +141,4 @@ class TestSimpleChat:
         fake_llm.error = RuntimeError("down")
         out = nodes.simple_chat_node({"query": "q", "intent": "CHAT", "messages": []})
         assert out["final_report"].startswith("Error:")
-        assert out["current_step"] == "completed"
-
-
-class TestReview:
-    def test_waits_when_no_feedback_and_not_approved(self):
-        assert nodes.review_node({}) == {}
-
-    def test_approved_completes(self):
-        out = nodes.review_node({"approved": True})
-        assert out["approved"] is True and out["current_step"] == "completed"
-
-    def test_feedback_requests_revision(self):
-        out = nodes.review_node({"user_feedback": "shorter", "revision_count": 0})
-        assert out["approved"] is False
-        assert out["revision_count"] == 1
-        assert out["current_step"] == "writing"
-
-    def test_third_revision_is_auto_approved(self):
-        out = nodes.review_node({"user_feedback": "again", "revision_count": 2})
-        assert out["approved"] is True
-        assert out["revision_count"] == 3
         assert out["current_step"] == "completed"

@@ -8,9 +8,7 @@ from app.agents.nodes import (
     researcher_node,
     writer_node,
     simple_chat_node,
-    review_node
 )
-from app.core.config import settings
 
 
 def create_research_workflow():
@@ -22,7 +20,6 @@ def create_research_workflow():
     workflow.add_node("planner", planner_node)
     workflow.add_node("researcher", researcher_node)
     workflow.add_node("writer", writer_node)
-    workflow.add_node("review", review_node)
 
     def route_after_intent(state: ResearchState) -> str:
         """Route based on intent classification."""
@@ -32,15 +29,6 @@ def create_research_workflow():
         elif current_step == "completed":
             return "end"
         return "planner"
-
-    def route_after_review(state: ResearchState) -> str:
-        """Human-in-the-loop routing."""
-        approved = state.get("approved", False)
-        revision_count = state.get("revision_count", 0)
-
-        if approved or revision_count >= 3:
-            return "end"
-        return "writer"
 
     workflow.set_entry_point("intent_classifier")
 
@@ -58,22 +46,9 @@ def create_research_workflow():
 
     workflow.add_edge("planner", "researcher")
     workflow.add_edge("researcher", "writer")
-    workflow.add_edge("writer", "review")
+    workflow.add_edge("writer", END)
 
-    workflow.add_conditional_edges(
-        "review",
-        route_after_review,
-        {
-            "writer": "writer",
-            "end": END
-        }
-    )
-
-    compile_kwargs = {"checkpointer": MemorySaver()}
-    if settings.ENABLE_HUMAN_REVIEW:
-        compile_kwargs["interrupt_before"] = ["review"]
-
-    return workflow.compile(**compile_kwargs)
+    return workflow.compile(checkpointer=MemorySaver())
 
 
 research_graph = create_research_workflow()

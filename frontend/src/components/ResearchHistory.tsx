@@ -65,8 +65,6 @@ export const ResearchHistory: React.FC = () => {
         return 'bg-green-500/20 text-green-400 border-green-500/50';
       case 'failed':
         return 'bg-red-500/20 text-red-400 border-red-500/50';
-      case 'processing':
-        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/50';
       default:
         return 'bg-slate-500/20 text-slate-400 border-slate-500/50';
     }
@@ -118,7 +116,6 @@ export const ResearchHistory: React.FC = () => {
               <option value="all">All Status</option>
               <option value="completed">Completed</option>
               <option value="failed">Failed</option>
-              <option value="processing">Processing</option>
             </select>
           </div>
 
@@ -240,14 +237,6 @@ export const ResearchHistory: React.FC = () => {
         )}
       </div>
 
-      {/* Load More (if needed) */}
-      {filteredHistory.length >= 20 && (
-        <div className="mt-6 text-center">
-          <button className="px-6 py-3 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 transition-colors">
-            Load More
-          </button>
-        </div>
-      )}
       {/* Report Modal */}
       {selectedReport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

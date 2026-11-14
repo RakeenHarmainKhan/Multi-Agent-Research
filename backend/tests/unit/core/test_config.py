@@ -21,10 +21,6 @@ def test_cors_empty_uses_defaults(monkeypatch):
     assert "http://localhost:5173" in _settings().BACKEND_CORS_ORIGINS
 
 
-def test_human_review_flag_off_in_tests():
-    assert _settings().ENABLE_HUMAN_REVIEW is False
-
-
 def test_blank_llm_prices_mean_unset(monkeypatch):
     """Regression: `LLM_INPUT_COST_PER_1M_TOKENS=` (as in .env.example) crashed startup."""
     monkeypatch.setenv("LLM_INPUT_COST_PER_1M_TOKENS", "")

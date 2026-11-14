@@ -1,7 +1,7 @@
 /**
  * Main chat interface: query input, mode selection and research results display.
  * Sends the query with thread_id and recent messages; renders the markdown report,
- * its cited sources and (when human review is on) approve/revise controls.
+ * and its cited sources.
  */
 import React, { useState, useRef, useEffect } from 'react';
 import { useResearch } from '../hooks/useResearch';
@@ -19,16 +19,14 @@ export const ChatInterface: React.FC = () => {
     error,
     executeResearch,
     regenerate,
-    submitFeedback,
     clearMessages,
     citations: currentCitations,
-    awaitingReview,
   } = useResearch();
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading, awaitingReview]);
+  }, [messages, isLoading]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -42,11 +40,6 @@ export const ChatInterface: React.FC = () => {
       e.preventDefault();
       handleSend();
     }
-  };
-
-  const requestChanges = () => {
-    const feedback = prompt('What would you like to change?');
-    if (feedback) submitFeedback(feedback, false);
   };
 
   return (
@@ -162,35 +155,6 @@ export const ChatInterface: React.FC = () => {
                             </button>
                           )}
                         </div>
-
-                        {/* Review Controls (Inside Assistant Bubble) */}
-                        {isLast && awaitingReview && (
-                          <div className="mt-6 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg space-y-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
-                              <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider">Human Review Required</h4>
-                            </div>
-                            <p className="text-xs text-slate-400 leading-relaxed">
-                              The agents have finished researching. Would you like to approve this report or request a specific revision?
-                            </p>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => submitFeedback('', true)}
-                                disabled={isLoading}
-                                className="px-4 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded text-xs font-bold transition-all disabled:opacity-50"
-                              >
-                                Approve
-                              </button>
-                              <button
-                                onClick={requestChanges}
-                                disabled={isLoading}
-                                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs font-bold transition-all disabled:opacity-50"
-                              >
-                                Request Changes
-                              </button>
-                            </div>
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>
@@ -214,37 +178,8 @@ export const ChatInterface: React.FC = () => {
                     ></div>
                   </div>
                   <span className="text-slate-400 text-sm">
-                    {messages.length % 2 === 0 ? "Agents are researching..." : "Synthesizing report..."}
+                    Working on it...
                   </span>
-                </div>
-              </div>
-            )}
-
-            {/* Review Controls (Fallback Bottom UI) */}
-            {awaitingReview && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
-              <div className="p-6 bg-blue-900/10 border border-blue-500/30 rounded-xl space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  <h4 className="font-semibold text-blue-400">Human Review Required</h4>
-                </div>
-                <p className="text-sm text-slate-400">
-                  The report is ready for your review. You can approve it as is or provide feedback for revision.
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => submitFeedback('', true)}
-                    disabled={isLoading}
-                    className="px-6 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-colors text-sm font-bold disabled:opacity-50"
-                  >
-                    Approve Report
-                  </button>
-                  <button
-                    onClick={requestChanges}
-                    disabled={isLoading}
-                    className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors text-sm font-bold disabled:opacity-50"
-                  >
-                    Request Revision
-                  </button>
                 </div>
               </div>
             )}

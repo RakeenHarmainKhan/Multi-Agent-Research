@@ -80,13 +80,14 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
               {children}
             </a>
           ),
-        code: ({ inline, children }) =>
-          inline ? (
-            <code className="bg-slate-800 text-cyan-400 px-1.5 py-0.5 rounded text-sm">
+        // react-markdown v9 has no `inline` prop: fenced blocks carry a language class or span lines
+        code: ({ className, children }) =>
+          /language-/.test(className ?? '') || String(children).includes('\n') ? (
+            <code className="block bg-slate-800 text-slate-300 p-4 rounded-lg overflow-x-auto text-sm">
               {children}
             </code>
           ) : (
-            <code className="block bg-slate-800 text-slate-300 p-4 rounded-lg overflow-x-auto text-sm">
+            <code className="bg-slate-800 text-cyan-400 px-1.5 py-0.5 rounded text-sm">
               {children}
             </code>
           ),

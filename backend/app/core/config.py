@@ -53,7 +53,6 @@ class Settings(BaseSettings):
     TAVILY_API_KEY: str | None = None
 
     # Workflow behavior
-    ENABLE_HUMAN_REVIEW: bool = False
     HISTORY_LIMIT: int = 100
 
     model_config = SettingsConfigDict(

@@ -6,7 +6,6 @@ import App from '../src/App';
 vi.mock('../src/services/api', () => ({
   apiService: {
     executeResearch: vi.fn(),
-    submitFeedback: vi.fn(),
     getSystemStats: vi.fn().mockReturnValue(new Promise(() => {})),
     checkHealth: vi.fn().mockReturnValue(new Promise(() => {})),
     getQueryHistory: vi.fn().mockResolvedValue([]),

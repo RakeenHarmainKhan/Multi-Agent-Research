@@ -3,7 +3,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { apiService } from '../services/api';
-import { formatCost, formatDuration } from '../utils/helpers';
+import { formatDuration } from '../utils/helpers';
 import type { HealthStatus, SystemStats } from '../types';
 
 export const Dashboard: React.FC = () => {
@@ -59,7 +59,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard
           title="Total Queries"
           value={stats.total_queries.toString()}
@@ -83,14 +83,6 @@ export const Dashboard: React.FC = () => {
           value={stats.total_tokens.toLocaleString('en-US')}
           subtitle={`${Math.round(stats.avg_tokens_per_query).toLocaleString('en-US')} per query`}
           color="blue"
-        />
-        <MetricCard
-          title="Est. Cost"
-          value={stats.total_cost === null ? '—' : formatCost(stats.total_cost)}
-          subtitle={
-            stats.total_cost === null ? 'Set LLM pricing in backend .env' : 'From configured pricing'
-          }
-          color="red"
         />
       </div>
 

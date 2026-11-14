@@ -37,11 +37,6 @@ class ResearchState(TypedDict, total=False):
     # Final outputs
     final_report: str
     citations: List[Dict[str, str]]
-    
-    # Human-in-the-loop
-    user_feedback: str
-    revision_count: int
-    approved: bool
 
     # Chat history (for context)
     messages: List[ConversationMessage]

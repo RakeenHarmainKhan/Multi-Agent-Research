@@ -16,7 +16,6 @@ class FakeGraph:
             "citations": [{"id": 1, "type": "web", "title": "T", "url": "http://t", "snippet": "s"}],
             "all_sources": [{"id": 1, "type": "web", "title": "T", "url": "http://t", "content": "c"}],
             "current_step": "completed",
-            "approved": True,
         }
         self.error = error
         self.inputs = None
@@ -136,12 +135,6 @@ class TestResultRetrieval:
 
     def test_unknown_thread_is_404(self, client):
         assert client.get("/api/v1/research/nope").status_code == 404
-
-
-class TestFeedback:
-    def test_disabled_when_human_review_is_off(self, client):
-        r = client.post("/api/v1/research/t1/feedback", json={"feedback": "x", "approved": False})
-        assert r.status_code == 400
 
 
 class TestAdmin:

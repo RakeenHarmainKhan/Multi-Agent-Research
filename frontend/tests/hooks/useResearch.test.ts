@@ -4,11 +4,10 @@ import { useResearch } from '../../src/hooks/useResearch';
 import { apiService } from '../../src/services/api';
 
 vi.mock('../../src/services/api', () => ({
-  apiService: { executeResearch: vi.fn(), submitFeedback: vi.fn() },
+  apiService: { executeResearch: vi.fn() },
 }));
 
 const executeResearch = vi.mocked(apiService.executeResearch);
-const submitFeedback = vi.mocked(apiService.submitFeedback);
 
 const RESPONSE = {
   thread_id: 'thread-1',
@@ -89,12 +88,6 @@ describe('executeResearch', () => {
     expect(result.current.isLoading).toBe(false);
   });
 
-  it('flags reports that are awaiting human review', async () => {
-    executeResearch.mockResolvedValueOnce({ ...RESPONSE, status: 'awaiting_review' });
-    const { result } = renderHook(() => useResearch());
-    await act(() => result.current.executeResearch('q'));
-    expect(result.current.awaitingReview).toBe(true);
-  });
 });
 
 describe('regenerate', () => {
@@ -128,23 +121,6 @@ describe('regenerate', () => {
     const { result } = renderHook(() => useResearch());
     await act(() => result.current.regenerate());
     expect(executeResearch).not.toHaveBeenCalled();
-  });
-});
-
-describe('submitFeedback', () => {
-  it('does nothing without an active thread', async () => {
-    const { result } = renderHook(() => useResearch());
-    await act(() => result.current.submitFeedback('x', false));
-    expect(submitFeedback).not.toHaveBeenCalled();
-  });
-
-  it('sends feedback for the current thread and appends the revised report', async () => {
-    submitFeedback.mockResolvedValue({ ...RESPONSE, report: 'Revised' });
-    const { result } = renderHook(() => useResearch());
-    await act(() => result.current.executeResearch('q'));
-    await act(() => result.current.submitFeedback('shorter', false));
-    expect(submitFeedback).toHaveBeenCalledWith('thread-1', { feedback: 'shorter', approved: false });
-    expect(result.current.messages.at(-1)?.content).toBe('Revised');
   });
 });
 

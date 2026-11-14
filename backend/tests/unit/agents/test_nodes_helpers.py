@@ -27,12 +27,13 @@ class TestConversationContext:
 
 
 class TestRateLimitDetection:
-    @pytest.mark.parametrize("msg", ["Error 429", "Rate limit exceeded", "rate-limited", "HTTP 404"])
+    @pytest.mark.parametrize("msg", ["Error 429", "Rate limit exceeded", "rate-limited"])
     def test_detected(self, msg):
         assert nodes._is_rate_limited_error(Exception(msg)) is True
 
-    def test_other_errors_not_detected(self):
-        assert nodes._is_rate_limited_error(Exception("invalid api key")) is False
+    @pytest.mark.parametrize("msg", ["invalid api key", "HTTP 404: DeploymentNotFound"])
+    def test_other_errors_not_detected(self, msg):
+        assert nodes._is_rate_limited_error(Exception(msg)) is False
 
 
 class _FlakyLLM:
@@ -64,6 +65,12 @@ class TestInvokeWithRetry:
             nodes._invoke_with_retry(llm, [])
         assert llm.calls == 3
 
+    def test_404_fails_fast_without_retrying(self, no_sleep):
+        """A 404 (e.g. wrong deployment name) won't fix itself, so don't wait and retry."""
+        llm = _FlakyLLM([Exception("HTTP 404: DeploymentNotFound")] * 3)
+        with pytest.raises(Exception, match="404"):
+            nodes._invoke_with_retry(llm, [])
+        assert llm.calls == 1
     def test_non_rate_limit_error_is_not_retried(self, no_sleep):
         llm = _FlakyLLM([ValueError("boom")])
         with pytest.raises(ValueError):

@@ -19,18 +19,11 @@ class ResearchRequest(BaseModel):
     mode: Literal["auto", "research"] = Field(
         "auto", description="auto: classifier decides chat vs research; research: always run web research"
     )
-    user_feedback: Optional[str] = Field(None, description="Feedback for report revision")
     messages: List[ConversationMessage] = Field(
         default_factory=list,
         max_length=50,
         description="Recent conversation history for stateless context",
     )
-
-
-class FeedbackRequest(BaseModel):
-    """Feedback model for human review flow."""
-    feedback: str = Field(default="", max_length=2000)
-    approved: bool = False
 
 
 class ResearchResponse(BaseModel):

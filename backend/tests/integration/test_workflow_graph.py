@@ -88,8 +88,6 @@ def run(query="q", mode="auto"):
         "query": query,
         "mode": mode,
         "messages": [],
-        "approved": True,  # no human review in tests
-        "revision_count": 0,
     }
     config = {"configurable": {"thread_id": str(uuid.uuid4())}}
     return research_graph.invoke(state, config=config)

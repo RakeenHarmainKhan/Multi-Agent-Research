@@ -7,7 +7,6 @@ import { apiService } from '../../src/services/api';
 vi.mock('../../src/services/api', () => ({
   apiService: {
     executeResearch: vi.fn(),
-    submitFeedback: vi.fn(),
   },
 }));
 
@@ -96,6 +95,17 @@ describe('sending', () => {
     await waitFor(() => expect(executeResearch).toHaveBeenCalledTimes(2));
     expect(executeResearch.mock.calls[1][0]).toMatchObject({ query: 'what is lora', mode: 'auto' });
     expect(screen.getAllByText('what is lora')).toHaveLength(1);
+  });
+
+  it('shows one honest loading message while waiting', async () => {
+    let finish: (value: typeof RESPONSE) => void = () => {};
+    executeResearch.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    render(<ChatInterface />);
+    await send('what is lora');
+    expect(await screen.findByText('Working on it...')).toBeInTheDocument();
+    finish(RESPONSE);
+    await screen.findByText(/LoRA adds low-rank updates/);
+    expect(screen.queryByText('Working on it...')).not.toBeInTheDocument();
   });
 
   it('clears the conversation', async () => {

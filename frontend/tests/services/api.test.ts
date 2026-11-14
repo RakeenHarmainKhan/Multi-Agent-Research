@@ -47,12 +47,6 @@ describe('ApiService', () => {
     expect(client.get).toHaveBeenCalledWith('/runs/run-1');
   });
 
-  it('submitFeedback posts to the feedback route', async () => {
-    client.post.mockResolvedValue({ data: {} });
-    await apiService.submitFeedback('abc', { feedback: 'x', approved: true });
-    expect(client.post).toHaveBeenCalledWith('/research/abc/feedback', { feedback: 'x', approved: true });
-  });
-
   it('getSystemStats and getQueryHistory use the admin routes', async () => {
     client.get.mockResolvedValue({ data: [] });
     await apiService.getSystemStats();

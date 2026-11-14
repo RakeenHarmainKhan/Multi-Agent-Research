@@ -53,6 +53,25 @@ describe('markdown basics', () => {
   });
 });
 
+describe('code', () => {
+  it('renders inline code inside the sentence, not as a block (regression)', () => {
+    const { container } = renderMd('Use the `max_tokens` setting here.');
+    const code = container.querySelector('p code')!;
+    expect(code).toHaveTextContent('max_tokens');
+    expect(code).not.toHaveClass('block');
+  });
+
+  it('renders fenced code blocks as blocks', () => {
+    const { container } = renderMd('```python\nprint("hi")\n```');
+    expect(container.querySelector('code')).toHaveClass('block');
+  });
+
+  it('renders fenced code without a language as a block', () => {
+    const { container } = renderMd('```\nline one\nline two\n```');
+    expect(container.querySelector('code')).toHaveClass('block');
+  });
+});
+
 describe('math', () => {
   it('renders inline $...$ with KaTeX', () => {
     const { container } = renderMd('Energy is $E = mc^2$ here');

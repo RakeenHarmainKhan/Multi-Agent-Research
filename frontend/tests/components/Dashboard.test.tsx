@@ -43,17 +43,12 @@ describe('Dashboard', () => {
     expect(screen.getByText('3,086 per query')).toBeInTheDocument();
   });
 
-  it('shows a dash, not $0.00, when pricing is not configured', async () => {
-    render(<Dashboard />);
-    await screen.findByText('Est. Cost');
-    expect(screen.getByText('—')).toBeInTheDocument();
-    expect(screen.queryByText('$0.00')).not.toBeInTheDocument();
-  });
-
-  it('shows the cost when the backend reports one', async () => {
+  it('does not show a cost card', async () => {
     getSystemStats.mockResolvedValue({ ...STATS, total_cost: 1.5 });
     render(<Dashboard />);
-    expect(await screen.findByText('$1.50')).toBeInTheDocument();
+    await screen.findByText('Tokens Used');
+    expect(screen.queryByText('Est. Cost')).not.toBeInTheDocument();
+    expect(screen.queryByText('$1.50')).not.toBeInTheDocument();
   });
 
   it('reads LLM and storage status from /health instead of hardcoding it', async () => {

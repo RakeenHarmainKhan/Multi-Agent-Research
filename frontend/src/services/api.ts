@@ -9,7 +9,6 @@ import type {
   ResearchRequest,
   ResearchResponse,
   SystemStats,
-  FeedbackRequest,
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -49,11 +48,6 @@ class ApiService {
   /** One specific question's result; a conversation thread can contain several runs. */
   async getRun(runId: string): Promise<ResearchResponse> {
     const response = await this.client.get<ResearchResponse>(`/runs/${runId}`);
-    return response.data;
-  }
-
-  async submitFeedback(threadId: string, feedback: FeedbackRequest): Promise<ResearchResponse> {
-    const response = await this.client.post<ResearchResponse>(`/research/${threadId}/feedback`, feedback);
     return response.data;
   }
 
