@@ -1,0 +1,131 @@
+import pytest
+
+from app.agents import nodes
+
+
+@pytest.fixture
+def fake_llm(monkeypatch, llm_response):
+    class Handle:
+        reply = "Claim [1] and more [2]."
+        error = None
+        prompts = []
+
+    def _invoke(state, prompt_messages):
+        Handle.prompts.append(prompt_messages)
+        if Handle.error:
+            raise Handle.error
+        return llm_response(Handle.reply)
+
+    Handle.prompts = []
+    Handle.error = None
+    monkeypatch.setattr(nodes, "_invoke_with_llm", _invoke)
+    return Handle
+
+
+WEB = [
+    {"title": "Alpha", "url": "http://alpha", "content": "alpha body", "score": 0.9},
+    {"title": "Beta", "url": "http://beta", "content": "beta body", "score": 0.8},
+]
+ACADEMIC = [{"content": "Published: 2025\nTitle: Paper X\nAuthors: Z", "type": "academic"}]
+
+
+class TestWriter:
+    def test_builds_report_citations_and_numbered_sources(self, fake_llm):
+        out = nodes.writer_node({"query": "q", "web_results": WEB, "academic_results": ACADEMIC})
+        assert out["final_report"] == "Claim [1] and more [2]."
+        assert [c["id"] for c in out["citations"]] == [1, 2]
+        assert [s["id"] for s in out["all_sources"]] == [1, 2, 3]
+        assert out["current_step"] == "review"
+
+    def test_prompt_lists_every_source_with_its_number(self, fake_llm, prompt_text):
+        nodes.writer_node({"query": "q", "web_results": WEB, "academic_results": ACADEMIC})
+        prompt = prompt_text(fake_llm.prompts[0])
+        assert "[1] Alpha" in prompt and "http://alpha" in prompt
+        assert "[2] Beta" in prompt
+        assert "[3] Paper X" in prompt
+
+    def test_prompt_requires_inline_citations_and_latex_dollars(self, fake_llm, prompt_text):
+        nodes.writer_node({"query": "q", "web_results": WEB, "academic_results": []})
+        prompt = prompt_text(fake_llm.prompts[0])
+        assert "square brackets" in prompt
+        assert "$...$" in prompt
+
+    def test_invented_citation_ids_are_removed(self, fake_llm):
+        fake_llm.reply = "Real [1] fake [7]."
+        out = nodes.writer_node({"query": "q", "web_results": WEB, "academic_results": []})
+        assert "[7]" not in out["final_report"]
+        assert [c["id"] for c in out["citations"]] == [1]
+
+    def test_no_sources_tells_model_not_to_cite(self, fake_llm, prompt_text):
+        fake_llm.reply = "General answer [1]."
+        out = nodes.writer_node({"query": "q", "web_results": [], "academic_results": []})
+        assert "No sources were retrieved" in prompt_text(fake_llm.prompts[0])
+        assert out["citations"] == []
+        assert "[1]" not in out["final_report"]
+
+    def test_revision_feedback_is_included(self, fake_llm, prompt_text):
+        nodes.writer_node(
+            {
+                "query": "q",
+                "web_results": WEB,
+                "academic_results": [],
+                "revision_count": 1,
+                "user_feedback": "make it shorter",
+            }
+        )
+        prompt = prompt_text(fake_llm.prompts[0])
+        assert "REVISION REQUEST #1" in prompt and "make it shorter" in prompt
+
+    def test_llm_failure_returns_error_report(self, fake_llm):
+        fake_llm.error = RuntimeError("gateway timeout")
+        out = nodes.writer_node({"query": "q", "web_results": WEB, "academic_results": []})
+        assert out["final_report"].startswith("Error generating report")
+        assert out["current_step"] == "completed"
+        assert "gateway timeout" in out["error"]
+
+
+class TestSimpleChat:
+    def test_returns_answer_and_extends_history(self, fake_llm):
+        fake_llm.reply = "A neural network is..."
+        out = nodes.simple_chat_node({"query": "What is a NN?", "intent": "CHAT", "messages": []})
+        assert out["final_report"] == "A neural network is..."
+        assert out["current_step"] == "completed"
+        assert out["messages"][-2:] == [
+            {"role": "user", "content": "What is a NN?"},
+            {"role": "assistant", "content": "A neural network is..."},
+        ]
+
+    def test_rejected_intent_uses_out_of_scope_prompt(self, fake_llm, prompt_text):
+        nodes.simple_chat_node({"query": "bake bread", "intent": "REJECTED", "messages": []})
+        assert "outside your research scope" in prompt_text(fake_llm.prompts[0])
+
+    def test_chat_prompt_asks_for_dollar_latex(self, fake_llm, prompt_text):
+        nodes.simple_chat_node({"query": "q", "intent": "CHAT", "messages": []})
+        assert "$...$" in prompt_text(fake_llm.prompts[0])
+
+    def test_failure_returns_error_message(self, fake_llm):
+        fake_llm.error = RuntimeError("down")
+        out = nodes.simple_chat_node({"query": "q", "intent": "CHAT", "messages": []})
+        assert out["final_report"].startswith("Error:")
+        assert out["current_step"] == "completed"
+
+
+class TestReview:
+    def test_waits_when_no_feedback_and_not_approved(self):
+        assert nodes.review_node({}) == {}
+
+    def test_approved_completes(self):
+        out = nodes.review_node({"approved": True})
+        assert out["approved"] is True and out["current_step"] == "completed"
+
+    def test_feedback_requests_revision(self):
+        out = nodes.review_node({"user_feedback": "shorter", "revision_count": 0})
+        assert out["approved"] is False
+        assert out["revision_count"] == 1
+        assert out["current_step"] == "writing"
+
+    def test_third_revision_is_auto_approved(self):
+        out = nodes.review_node({"user_feedback": "again", "revision_count": 2})
+        assert out["approved"] is True
+        assert out["revision_count"] == 3
+        assert out["current_step"] == "completed"

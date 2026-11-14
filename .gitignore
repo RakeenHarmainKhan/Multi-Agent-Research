@@ -1,0 +1,104 @@
+# ---------------------------------------------------------------------------
+# Secrets & environment (never commit real keys; commit only *.example files)
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials.json
+
+# ---------------------------------------------------------------------------
+# Python / Backend
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+build/
+dist/
+.eggs/
+pip-wheel-metadata/
+
+# Virtual environments (any name, incl. the project's `mara` venv)
+.venv/
+venv/
+env/
+ENV/
+backend/.venv/
+backend/venv/
+backend/env/
+backend/ENV/
+mara/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.cover
+.hypothesis/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# ---------------------------------------------------------------------------
+# Node / Frontend
+# ---------------------------------------------------------------------------
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+frontend/.next/
+frontend/coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---------------------------------------------------------------------------
+# Logs & temp files
+# ---------------------------------------------------------------------------
+*.log
+logs/
+backend/logs/
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.cache/
+*.dockerfile.swp
+
+# ---------------------------------------------------------------------------
+# IDEs, AI assistants & OS
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+.claude/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------------------------------------------------------------------------
+# Project-specific (private notes, monitoring)
+# ---------------------------------------------------------------------------
+deployment.md
+portfolio.md
+.sentry-native/
+.sentry-release
