@@ -69,19 +69,19 @@ class TestResearcher:
         nodes.researcher_node(_state([]))
         assert web.queries == ["q"]
 
-    def test_academic_steps_need_flag(self, tools):
-        _, academic = tools
+    def test_runs_every_planned_step_including_academic(self, tools):
+        """Regression: planned academic steps were silently skipped unless requires_academic was set."""
+        web, academic = tools
         academic.result = "Title: P1\n\nTitle: P2\n\nTitle: P3"
-        plan = [{"query": "x", "type": "academic"}]
-        off = nodes.researcher_node(_state(plan, requires_academic=False))
-        assert off["academic_results"] == []
-        on = nodes.researcher_node(_state(plan, requires_academic=True))
-        assert len(on["academic_results"]) == 2  # max 2 papers per step
+        plan = [{"query": "x", "type": "academic"}, {"query": "y", "type": "web"}]
+        out = nodes.researcher_node(_state(plan, requires_academic=False))
+        assert academic.queries == ["x"] and web.queries == ["y"]
+        assert len(out["academic_results"]) == 2  # max 2 papers per step
 
-    def test_web_steps_skipped_when_web_not_required(self, tools):
+    def test_unknown_step_type_runs_as_web(self, tools):
         web, _ = tools
-        nodes.researcher_node(_state([{"query": "x", "type": "web"}], requires_web=False))
-        assert web.queries == []
+        nodes.researcher_node(_state([{"query": "x", "type": "video"}]))
+        assert web.queries == ["x"]
 
     def test_failing_step_does_not_abort_the_run(self, tools):
         web, _ = tools

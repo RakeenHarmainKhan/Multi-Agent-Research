@@ -100,7 +100,9 @@ class TestPlanner:
         fake_llm.reply = json.dumps(
             {"steps": [{"query": "lora basics", "type": "web"}, {"query": "lora paper", "type": "academic"}]}
         )
-        out = nodes.planner_node({"query": "lora", "messages": []})
+        out = nodes.planner_node(
+            {"query": "lora", "messages": [], "requires_web": True, "requires_academic": True}
+        )
         assert out["current_step"] == "research"
         assert [s["type"] for s in out["plan"]] == ["web", "academic"]
 
@@ -109,3 +111,34 @@ class TestPlanner:
         out = nodes.planner_node({"query": "lora", "messages": []})
         assert out["plan"] == [{"query": "lora", "type": "web"}]
         assert "Planning error" in out["error"]
+
+    def test_disallowed_academic_step_becomes_web(self, fake_llm):
+        fake_llm.reply = json.dumps({"steps": [{"query": "lora paper", "type": "academic"}]})
+        out = nodes.planner_node(
+            {"query": "lora", "messages": [], "requires_web": True, "requires_academic": False}
+        )
+        assert out["plan"] == [{"query": "lora paper", "type": "web"}]
+
+    def test_allowed_academic_step_is_kept(self, fake_llm):
+        fake_llm.reply = json.dumps({"steps": [{"query": "lora paper", "type": "academic"}]})
+        out = nodes.planner_node(
+            {"query": "lora", "messages": [], "requires_web": True, "requires_academic": True}
+        )
+        assert out["plan"] == [{"query": "lora paper", "type": "academic"}]
+
+    def test_academic_only_query_converts_web_steps(self, fake_llm):
+        fake_llm.reply = json.dumps({"steps": [{"query": "news", "type": "web"}]})
+        out = nodes.planner_node(
+            {"query": "q", "messages": [], "requires_web": False, "requires_academic": True}
+        )
+        assert out["plan"] == [{"query": "news", "type": "academic"}]
+
+    def test_prompt_lists_allowed_types(self, fake_llm, prompt_text):
+        fake_llm.reply = json.dumps({"steps": [{"query": "a", "type": "web"}]})
+        nodes.planner_node({"query": "q", "messages": [], "requires_web": True, "requires_academic": False})
+        assert 'Allowed step types for this query: "web".' in prompt_text(fake_llm.prompts[0])
+
+    def test_empty_steps_fall_back_to_the_query(self, fake_llm):
+        fake_llm.reply = json.dumps({"steps": [{"query": "  ", "type": "web"}]})
+        out = nodes.planner_node({"query": "lora", "messages": []})
+        assert out["plan"] == [{"query": "lora", "type": "web"}]

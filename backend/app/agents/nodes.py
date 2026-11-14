@@ -207,10 +207,39 @@ Examples:
         return output
 
 
+def _allowed_step_types(state: Dict[str, Any]) -> List[str]:
+    """Search types the classifier allowed for this query (web is the fallback)."""
+    allowed = [
+        step_type
+        for step_type, enabled in (
+            ("web", state.get("requires_web", True)),
+            ("academic", state.get("requires_academic", False)),
+        )
+        if enabled
+    ]
+    return allowed or ["web"]
+
+
+def _normalize_plan(steps: List[Dict[str, str]], allowed: List[str], query: str) -> List[Dict[str, str]]:
+    """Drop empty steps and convert disallowed types, so the researcher runs exactly what is planned."""
+    plan = []
+    for step in steps:
+        step_query = (step.get("query") or "").strip()
+        if not step_query:
+            continue
+        step_type = step.get("type")
+        if step_type not in allowed:
+            logger.info("Planner step type %r not allowed here; running %r as %s", step_type, step_query, allowed[0])
+            step_type = allowed[0]
+        plan.append({"query": step_query, "type": step_type})
+    return plan or [{"query": query, "type": allowed[0]}]
+
+
 def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """Generate an executable research plan."""
     query = state["query"]
     conversation_context = _conversation_context(state.get("messages", []))
+    allowed = _allowed_step_types(state)
 
     prompt = ChatPromptTemplate.from_messages([
         (
@@ -220,7 +249,7 @@ def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
 {format_instructions}
 
 Guidelines:
-- If the query is NOT related to AI/Computer Science, do NOT generate steps.
+- Allowed step types for this query: {allowed_types}. Do not use any other type.
 - Use "web" type for recent news, trends, practical info
 - Use "academic" type for scientific papers, theoretical concepts
 - Each query should be self-contained and specific
@@ -249,12 +278,13 @@ Output:
             query=query,
             conversation_context=conversation_context,
             format_instructions=parser.get_format_instructions(),
+            allowed_types=", ".join(f'"{t}"' for t in allowed),
         )
         response = _invoke_with_llm(state, prompt_messages)
         result = parser.parse(response.content)
-        logger.info("Research plan: %s steps", len(result.steps))
-        logger.debug("State after planner: %s", result)
-        output = {"plan": [s.model_dump() if hasattr(s, "model_dump") else s for s in result.steps], "current_step": "research"}
+        plan = _normalize_plan(result.steps, allowed, query)
+        logger.info("Research plan: %s steps (%s)", len(plan), ", ".join(s["type"] for s in plan))
+        output = {"plan": plan, "current_step": "research"}
         logger.debug("DEBUG: Node 'planner' output: %s", output)
         return output
     except Exception as exc:
@@ -269,28 +299,31 @@ Output:
 
 
 def researcher_node(state: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute research plan efficiently with bound tools if possible, otherwise manual invoke."""
+    """Execute every step of the research plan (the planner already applied the allowed types)."""
     query = state.get("query", "")
     plan = state.get("plan", [])
     if not plan:
         plan = [{"query": query, "type": "web"}]
-        
-    requires_web = state.get("requires_web", True)
-    requires_academic = state.get("requires_academic", False)
 
     web_results: List[Dict[str, Any]] = []
     academic_results: List[Dict[str, Any]] = []
     seen_urls: set = set()
 
-    # Bind tools to LLM for more reliable execution if needed, 
-    # but here we follow request for 'bound tools' by using LangChain's Tool binding pattern
-    # though research usually is direct invoke.
-    
     for step in plan:
         q = step.get("query", query)
         st = step.get("type", "web")
         try:
-            if st == "web" and requires_web:
+            if st == "academic":
+                logger.debug("Executing academic search: %s", q)
+                res_str = academic_search.invoke(q)
+                for line in res_str.split("\n\n")[:2]: # Max 2 papers per step
+                    if line.strip():
+                        academic_results.append({
+                            "content": line.strip(), # Truncated the content later on as well
+                            "type": "academic",
+                            "source_query": q,
+                        })
+            else:
                 logger.debug("Executing web search: %s", q)
                 results = web_search.invoke(q)
                 if isinstance(results, dict):  # TavilySearch returns {"results": [...]}
@@ -307,16 +340,6 @@ def researcher_node(state: Dict[str, Any]) -> Dict[str, Any]:
                         "score": res.get("score", 0),
                         "source_query": q,
                     })
-            elif st == "academic" and requires_academic:
-                logger.debug("Executing academic search: %s", q)
-                res_str = academic_search.invoke(q)
-                for line in res_str.split("\n\n")[:2]: # Max 2 papers per step
-                    if line.strip():
-                        academic_results.append({
-                            "content": line.strip(), # Truncated the content later on as well
-                            "type": "academic",
-                            "source_query": q,
-                        })
         except Exception as e:
             logger.error("Step execution failed: %s", e)
 
