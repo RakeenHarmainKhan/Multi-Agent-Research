@@ -31,6 +31,17 @@ class TestClaimSentences:
     def test_empty_report(self):
         assert metrics.claim_sentences("") == []
 
+    def test_initials_do_not_split_a_cited_claim(self):
+        claim = "The most recent prize went to John J. Hopfield and Geoffrey Hinton. [2]"
+        following = "The prize was awarded for foundational discoveries. [1]"
+        assert metrics.claim_sentences(f"{claim} {following}") == [claim, following]
+        assert metrics.citation_coverage(f"{claim} {following}") == (2, 2)
+
+    def test_sentence_after_us_abbreviation_is_still_separate(self):
+        first = "The prize was awarded in the U.S."
+        second = "The next prize was awarded later. [1]"
+        assert metrics.claim_sentences(f"{first} {second}") == [first, second]
+
 
 class TestCitationCoverage:
     def test_counts_cited_claims_over_all_claims(self):

@@ -18,21 +18,21 @@ class Script:
         self.calls = []
         self.intent = "RESEARCH"
         self.safety = None  # what the classifier says about safety: None, "safe" or "harmful"
+        self.search_query = ""
         self.chat_reply = "Plain chat answer."
         self.report = "Finding one [1]. Finding two [2]. Bogus [9]."
 
     def __call__(self, state, prompt_messages, llm_response):
         system = str(prompt_messages[0].content)
-        if "ONLY respond to queries related to Artificial Intelligence" in system:
+        if "You route questions" in system:
             self.calls.append("classifier")
-            if self.intent == "REJECTED":
-                return llm_response("REJECTED")
             return llm_response(
                 json.dumps(
                     {
                         "intent": self.intent,
                         "requires_academic": True,
                         "requires_web": True,
+                        "search_query": self.search_query,
                         "safety": self.safety,
                         "reasoning": "r",
                     }
@@ -50,8 +50,9 @@ class Script:
                     }
                 )
             )
-        if "research summary" in system:
+        if "Cite sources inline" in system:
             self.calls.append("writer")
+            self.last_writer_system = system
             return llm_response(self.report)
         self.calls.append("chat")
         self.last_chat_system = system
@@ -79,8 +80,9 @@ def env(monkeypatch, llm_response):
             ]
         }
     )
-    academic = FakeTool("Published: 2025\nTitle: Paper X\nAuthors: Z")
+    academic = FakeTool({"results": [{"title": "Paper X", "url": "http://paper-x", "content": "z", "score": 1}]})
     monkeypatch.setattr(nodes, "_invoke_with_llm", lambda s, m: script(s, m, llm_response))
+    monkeypatch.setattr(nodes, "_review_lookup", lambda state, report: nodes.LookupReview(answered=True))
     monkeypatch.setattr(nodes, "web_search", web)
     monkeypatch.setattr(nodes, "academic_search", academic)
     return script, web, academic
@@ -112,6 +114,17 @@ class TestAutoMode:
         assert script.calls == ["classifier", "planner", "writer"]
         assert web.queries == ["web q"] and academic.queries == ["paper q"]
         assert out["current_step"] == "completed"
+        assert set(out["stage_timings"]) == {"input_guard", "intent_classifier", "planner", "researcher", "writer"}
+        assert all(t >= 0 for t in out["stage_timings"].values())
+
+    def test_stage_timings_reset_between_runs_on_same_thread(self, env):
+        script, _, _ = env
+        config = {"configurable": {"thread_id": str(uuid.uuid4())}}
+        research_graph.invoke({"query": "q", "mode": "auto", "messages": []}, config=config)
+        script.intent = "CHAT"
+        out = research_graph.invoke({"query": "q", "mode": "auto", "messages": []}, config=config)
+        assert set(out["stage_timings"]) == {"input_guard", "intent_classifier", "simple_chat"}
+        assert set(out["stage_retries"]) == set(out["stage_timings"])
 
     def test_citations_resolve_to_retrieved_sources(self, env):
         out = run("Latest LLM architectures")
@@ -119,14 +132,54 @@ class TestAutoMode:
         assert [c["title"] for c in out["citations"]] == ["Alpha", "Beta"]
         assert [s["id"] for s in out["all_sources"]] == [1, 2, 3]
 
-    def test_rejected_query_gets_brief_out_of_scope_answer(self, env):
+    def test_lookup_skips_planner_and_runs_one_web_search(self, env):
+        script, web, academic = env
+        script.intent = "LOOKUP"
+        script.search_query = "EUR to JPY exchange rate today"
+        out = run("What is the euro worth in yen?")
+        assert script.calls == ["classifier", "writer"]
+        assert web.queries == ["EUR to JPY exchange rate today"] and academic.queries == []
+        assert "Lead with the answer" in script.last_writer_system
+        assert out["intent"] == "LOOKUP"
+        assert [c["title"] for c in out["citations"]] == ["Alpha", "Beta"]
+        assert out["search_diagnostics"][0]["accepted"] == 2
+
+    def test_lookup_provider_error_survives_graph_and_does_not_become_a_source(self, env):
         script, web, _ = env
-        script.intent = "REJECTED"
-        out = run("How to bake pizza?")
-        assert script.calls == ["classifier", "chat"]
-        assert "outside your research scope" in script.last_chat_system
-        assert web.queries == []
-        assert out["intent"] == "REJECTED"
+        script.intent = "LOOKUP"
+        web.result = {"error": RuntimeError("provider unavailable")}
+        out = run("When is the next event?")
+        assert out["all_sources"] == [] and "No sources were retrieved" in out["final_report"]
+        assert out["search_diagnostics"][0]["outcome"] == "error"
+        assert out["search_diagnostics"][0]["error_type"] == "RuntimeError"
+        assert "writer" not in script.calls
+
+    def test_incomplete_lookup_searches_again_and_preserves_diagnostics(self, env, monkeypatch):
+        script, web, _ = env
+        script.intent = "LOOKUP"
+        script.search_query = "first search"
+        reviews = iter([
+            nodes.LookupReview(answered=False, followup_query="better search"),
+            nodes.LookupReview(answered=True),
+        ])
+        monkeypatch.setattr(nodes, "_review_lookup", lambda state, report: next(reviews))
+
+        def search(query):
+            web.queries.append(query)
+            return {"results": [{"title": query, "url": "http://" + query.replace(" ", "-"),
+                                 "content": "facts", "score": 0.9}]}
+
+        monkeypatch.setattr(web, "invoke", search)
+        out = run("Who won?")
+        assert web.queries == ["first search", "better search"]
+        assert len(out["search_diagnostics"]) == 2 and out["search_diagnostics"][1]["followup"] is True
+        assert [s["title"] for s in out["all_sources"]] == ["better search", "first search"]
+        assert out["current_step"] == "completed"
+
+    def test_research_uses_the_report_format(self, env):
+        script, _, _ = env
+        run("Compare heat pumps and gas boilers")
+        assert "## Executive Summary" in script.last_writer_system
 
 
 class TestResearchMode:

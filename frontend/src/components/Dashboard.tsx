@@ -50,7 +50,7 @@ export const Dashboard: React.FC = () => {
     : 0;
 
   return (
-    <div className="h-full overflow-y-auto bg-slate-950 p-8">
+    <div className="h-full overflow-y-auto bg-slate-950 p-4 sm:p-8">
       <div className="mb-8">
         <h2 className="text-3xl font-bold text-slate-100">System Analytics</h2>
         <p className="text-slate-400 mt-2">
@@ -64,25 +64,21 @@ export const Dashboard: React.FC = () => {
           title="Total Queries"
           value={stats.total_queries.toString()}
           subtitle={`${stats.queries_today} today`}
-          color="blue"
         />
         <MetricCard
           title="Success Rate"
           value={`${successRate}%`}
           subtitle={`${stats.failed_queries} failed · ${stats.blocked_queries} blocked`}
-          color="green"
         />
         <MetricCard
           title="Avg Latency"
           value={formatDuration(stats.avg_latency)}
           subtitle="Per completed query"
-          color="purple"
         />
         <MetricCard
           title="Tokens Used"
           value={stats.total_tokens.toLocaleString('en-US')}
           subtitle={`${Math.round(stats.avg_tokens_per_query).toLocaleString('en-US')} per query`}
-          color="blue"
         />
       </div>
 
@@ -117,28 +113,17 @@ interface MetricCardProps {
   title: string;
   value: string;
   subtitle: string;
-  color: 'blue' | 'green' | 'purple' | 'red';
 }
 
 const MetricCard: React.FC<MetricCardProps> = ({
   title,
   value,
   subtitle,
-  color,
 }) => {
-  const colorClasses = {
-    blue: 'from-blue-500 to-blue-600',
-    green: 'from-green-500 to-green-600',
-    purple: 'from-purple-500 to-purple-600',
-    red: 'from-red-500 to-red-600',
-  };
-
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-lg p-6">
       <h3 className="text-slate-400 text-sm mb-2">{title}</h3>
-      <p
-        className={`text-3xl font-bold bg-gradient-to-r ${colorClasses[color]} bg-clip-text text-transparent`}
-      >
+      <p className="text-3xl font-semibold text-slate-100">
         {value}
       </p>
       <p className="text-slate-500 text-xs mt-2">{subtitle}</p>

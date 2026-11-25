@@ -30,8 +30,8 @@ export const useResearch = (): UseResearchReturn => {
   const [citations, setCitations] = useState<Citation[]>([]);
   const [redactions, setRedactions] = useState<string[]>([]);
 
-  const appendAssistant = useCallback((content: string) => {
-    setMessages((prev) => [...prev, { role: 'assistant', content, timestamp: new Date() }]);
+  const appendAssistant = useCallback((content: string, answerCitations: Citation[] = []) => {
+    setMessages((prev) => [...prev, { role: 'assistant', content, timestamp: new Date(), citations: answerCitations }]);
   }, []);
 
   /** Ask `query` with `history` as context; the chat becomes `history` + question + answer. */
@@ -54,7 +54,7 @@ export const useResearch = (): UseResearchReturn => {
       setCurrentThreadId(response.thread_id);
       setCitations(response.citations || []);
       setRedactions(response.guardrails?.redactions ?? []);
-      appendAssistant(response.report || 'Research completed but no report generated.');
+      appendAssistant(response.report || 'Research completed but no report generated.', response.citations || []);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Research failed';
       setError(errorMessage);

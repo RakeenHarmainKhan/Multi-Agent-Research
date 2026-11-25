@@ -15,7 +15,7 @@ vi.mock('../src/services/api', () => ({
 describe('App tab persistence', () => {
   it('opens the chat tab by default', () => {
     render(<App />);
-    expect(screen.getByText(/Welcome to MARA/)).toBeVisible();
+    expect(screen.getByText('What would you like to explore?')).toBeVisible();
   });
 
   it('restores the saved tab on first render', () => {
@@ -27,7 +27,7 @@ describe('App tab persistence', () => {
   it('ignores an invalid saved tab', () => {
     localStorage.setItem('mara_active_tab', 'nonsense');
     render(<App />);
-    expect(screen.getByText(/Welcome to MARA/)).toBeVisible();
+    expect(screen.getByText('What would you like to explore?')).toBeVisible();
   });
 
   it('saves the tab when it changes', async () => {

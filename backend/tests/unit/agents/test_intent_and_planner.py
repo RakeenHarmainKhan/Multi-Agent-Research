@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 
 import pytest
 
@@ -46,29 +47,45 @@ class TestIntentClassifier:
         assert out["intent"] == "CHAT"
         assert out["current_step"] == "chat"
 
-    def test_rejected_query_goes_to_chat_with_rejected_intent(self, fake_llm):
-        fake_llm.reply = _classifier_reply("REJECTED", web=False)
-        out = nodes.intent_classifier_node({"query": "How to bake pizza?", "messages": []})
-        assert out == {"intent": "REJECTED", "current_step": "chat"}
-
-    def test_bare_rejected_reply_is_tolerated(self, fake_llm):
-        fake_llm.reply = "REJECTED"
-        out = nodes.intent_classifier_node({"query": "How to bake pizza?", "messages": []})
-        assert out == {"intent": "REJECTED", "current_step": "chat"}
-
-    def test_word_rejected_in_reasoning_does_not_reject(self, fake_llm):
-        """Regression: any reply containing 'rejected' used to be treated as off-topic."""
+    def test_lookup_gets_a_one_step_web_plan_and_skips_the_planner(self, fake_llm):
         fake_llm.reply = json.dumps(
-            {
-                "intent": "RESEARCH",
-                "requires_academic": False,
-                "requires_web": True,
-                "reasoning": "AI question, so it is not REJECTED",
-            }
+            {"intent": "LOOKUP", "requires_academic": True, "search_query": " Paris population 2025 ", "reasoning": "r"}
         )
-        out = nodes.intent_classifier_node({"query": "Why are some LLM papers rejected?", "messages": []})
-        assert out["intent"] == "RESEARCH"
-        assert out["current_step"] == "planning"
+        out = nodes.intent_classifier_node({"query": "How many people live there?", "messages": []})
+        assert out["intent"] == "LOOKUP"
+        assert out["plan"] == [{"query": "Paris population 2025", "type": "web"}]
+        assert out["requires_academic"] is False
+        assert out["current_step"] == "research"
+
+    def test_lookup_without_search_query_searches_the_question(self, fake_llm):
+        fake_llm.reply = _classifier_reply("LOOKUP")
+        out = nodes.intent_classifier_node({"query": "Who won yesterday?", "messages": []})
+        assert out["plan"] == [{"query": "Who won yesterday?", "type": "web"}]
+
+    def test_lookup_prompt_requests_specific_query_without_guessed_constraints(self, fake_llm):
+        nodes.intent_classifier_node({"query": "Who won the most recent physics prize?"})
+        system = fake_llm.prompts[0][0].content
+        assert "directly related to the question" in system
+        assert "the exact fact requested" in system
+        assert "location or timeframe" in system
+        assert "guessed answers" in system and "unnecessary constraints" in system
+
+    def test_classifier_gets_current_date_for_relative_search_queries(self, fake_llm, monkeypatch):
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls(2026, 11, 24, tzinfo=timezone.utc)
+
+        monkeypatch.setattr(nodes, "datetime", FixedDateTime)
+        nodes.intent_classifier_node({"query": "When are the next Olympics?"})
+        system = fake_llm.prompts[0][0].content
+        assert "2026-11-24" in system
+        assert "resolve relative dates using the current date" in system
+
+    def test_removed_rejected_intent_falls_back_to_research(self, fake_llm):
+        fake_llm.reply = _classifier_reply("REJECTED")
+        out = nodes.intent_classifier_node({"query": "How to bake pizza?", "messages": []})
+        assert out["intent"] == "RESEARCH" and "error" in out
 
     def test_research_mode_skips_the_llm(self, fake_llm):
         out = nodes.intent_classifier_node({"query": "anything", "mode": "research", "messages": []})
@@ -94,6 +111,12 @@ class TestIntentClassifier:
             {"query": "and its cost?", "messages": [{"role": "user", "content": "about LoRA"}]}
         )
         assert "about LoRA" in prompt_text(fake_llm.prompts[0])
+
+    def test_classifier_allows_academic_search_in_every_field(self, fake_llm, prompt_text):
+        nodes.intent_classifier_node({"query": "Compare treatments for diabetes", "messages": []})
+        prompt = prompt_text(fake_llm.prompts[0])
+        assert "scholarly evidence" in prompt and "in any field" in prompt
+        assert "arXiv" not in prompt
 
 
 class TestSafetyVerdict:
@@ -231,7 +254,7 @@ class TestPlanner:
 class TestPlanShape:
     ALLOWED_BOTH = ["web", "academic"]
 
-    def test_only_one_arxiv_search_is_kept(self):
+    def test_only_one_academic_search_is_kept(self):
         steps = [
             {"query": "a", "type": "academic"},
             {"query": "b", "type": "web"},
@@ -244,22 +267,23 @@ class TestPlanShape:
         steps = [{"query": f"w{i}", "type": "web"} for i in range(3)]
         assert len(nodes._normalize_plan(steps, self.ALLOWED_BOTH, "q")) == 3
 
-    def test_a_disallowed_academic_step_converted_to_web_does_not_count_as_arxiv(self):
+    def test_a_disallowed_academic_step_converted_to_web_does_not_count_as_academic(self):
         steps = [{"query": "a", "type": "academic"}, {"query": "b", "type": "academic"}]
         plan = nodes._normalize_plan(steps, ["web"], "q")
         assert [s["type"] for s in plan] == ["web", "web"]
 
-    def test_planner_drops_extra_arxiv_steps_end_to_end(self, fake_llm):
+    def test_planner_drops_extra_academic_steps_end_to_end(self, fake_llm):
         fake_llm.reply = json.dumps(
             {"steps": [{"query": "p1", "type": "academic"}, {"query": "p2", "type": "academic"}, {"query": "w", "type": "web"}]}
         )
         out = nodes.planner_node({"query": "q", "messages": [], "requires_web": True, "requires_academic": True})
         assert [s["type"] for s in out["plan"]] == ["academic", "web"]
 
-    def test_prompt_asks_for_specific_queries_covering_every_part_and_limits_arxiv(self, fake_llm, prompt_text):
+    def test_prompt_asks_for_specific_queries_covering_every_part_and_limits_academic(self, fake_llm, prompt_text):
         fake_llm.reply = json.dumps({"steps": [{"query": "a", "type": "web"}]})
         nodes.planner_node({"query": "q", "messages": [], "requires_web": True, "requires_academic": True})
         prompt = prompt_text(fake_llm.prompts[0])
         assert "several parts" in prompt and "at least one query" in prompt
         assert "specific and self-contained" in prompt and "pronouns" in prompt
         assert "at most once" in prompt and "practical questions" in prompt
+        assert "short keyword query" in prompt and "arXiv" not in prompt

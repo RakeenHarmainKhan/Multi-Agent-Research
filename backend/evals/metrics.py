@@ -5,7 +5,7 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
-_SENTENCE_BREAK = re.compile(r"(?<=[.!?\]])\s+(?=[A-Z])")
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?\]])(?<!\s[A-Z]\.)(?<!^[A-Z]\.)\s+(?=[A-Z])")
 _MARKER = re.compile(r"\[(\d+)\]")
 
 

@@ -114,7 +114,7 @@ describe('sending', () => {
     await screen.findByText(/LoRA adds low-rank updates/);
     await user.click(screen.getByRole('button', { name: 'Clear Chat' }));
     expect(screen.queryByText(/LoRA adds low-rank updates/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Welcome to MARA/)).toBeInTheDocument();
+    expect(screen.getByText('What would you like to explore?')).toBeInTheDocument();
   });
 });
 
@@ -190,8 +190,32 @@ describe('sources panel', () => {
     const { container } = render(<ChatInterface />);
     await send('what is lora');
     await screen.findByText(/LoRA adds low-rank updates/);
-    expect(container.querySelector('sup a[href="#cite-1"]')).toBeInTheDocument();
-    expect(container.querySelector('#cite-1')).toBeInTheDocument();
+    expect(container.querySelector('sup a[href="#cite-1-1"]')).toBeInTheDocument();
+    expect(container.querySelector('#cite-1-1')).toBeInTheDocument();
+  });
+
+  it('keeps each answer linked to its own sources after a follow-up', async () => {
+    executeResearch
+      .mockResolvedValueOnce(RESPONSE)
+      .mockResolvedValueOnce({
+        ...RESPONSE,
+        report: 'A different answer [1].',
+        citations: [{ id: 1, type: 'web', title: 'Second source', url: 'http://second.test', snippet: 'second snippet' }],
+      });
+    const { container } = render(<ChatInterface />);
+    await send('first question');
+    await screen.findByText(/LoRA adds low-rank updates/);
+    await send('second question');
+    await screen.findByText(/A different answer/);
+    expect(screen.getByText('Alpha Blog')).toBeInTheDocument();
+    expect(screen.getByText('Second source')).toBeInTheDocument();
+    expect(container.querySelector('sup a[href="#cite-1-1"]')).toBeInTheDocument();
+    expect(container.querySelector('sup a[href="#cite-3-1"]')).toBeInTheDocument();
+    expect(container.querySelector('#cite-1-1')).toHaveTextContent('Alpha Blog');
+    expect(container.querySelector('#cite-3-1')).toHaveTextContent('Second source');
+    await userEvent.setup().click(container.querySelector('sup a[href="#cite-1-1"]')!);
+    expect(container.querySelector('#cite-1-1')?.closest('details')).toHaveAttribute('open');
+    expect(container.querySelector('#cite-3-1')?.closest('details')).not.toHaveAttribute('open');
   });
 
   it('hides the panel when the response has no citations', async () => {

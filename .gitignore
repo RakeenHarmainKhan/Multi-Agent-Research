@@ -102,6 +102,13 @@ deployment.md
 portfolio.md
 .sentry-native/
 .sentry-release
+.impeccable/config.local.json
+.impeccable/mocks/
+.impeccable/questions/
+.impeccable/review/
 backend/evals/results/*.json
 backend/evals/results/*.md
-!backend/evals/results/label_sample.txt
+backend/evals/results/*.txt
+
+PROJECT.md
+PRODUCT.md/PROJECT.md

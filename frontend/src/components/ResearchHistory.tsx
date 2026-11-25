@@ -14,6 +14,7 @@ interface ExtendedQueryHistory extends QueryHistory {
 export const ResearchHistory: React.FC = () => {
   const [history, setHistory] = useState<QueryHistory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [sortOrder, setSortOrder] = useState<string>('recent');
@@ -27,8 +28,10 @@ export const ResearchHistory: React.FC = () => {
     try {
       const data = await apiService.getQueryHistory(50);
       setHistory(data);
+      setLoadError(false);
     } catch (error) {
       console.error('Failed to load history:', error);
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -62,16 +65,20 @@ export const ResearchHistory: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
-        return 'bg-green-500/20 text-green-400 border-green-500/50';
+        return 'bg-green-500/20 text-green-800 border-green-500/50';
       case 'failed':
-        return 'bg-red-500/20 text-red-400 border-red-500/50';
+        return 'bg-red-500/20 text-red-800 border-red-500/50';
       default:
         return 'bg-slate-500/20 text-slate-400 border-slate-500/50';
     }
   };
 
   const getIntentBadge = (intent: string) =>
-    intent === 'CHAT' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400';
+    intent === 'CHAT'
+      ? 'bg-purple-500/20 text-purple-800'
+      : intent === 'LOOKUP'
+        ? 'bg-emerald-500/20 text-emerald-800'
+        : 'bg-blue-500/20 text-blue-400';
 
   if (loading) {
     return (
@@ -82,7 +89,7 @@ export const ResearchHistory: React.FC = () => {
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-slate-950 p-8">
+    <div className="h-full overflow-y-auto bg-slate-950 p-4 sm:p-8">
       {/* Header */}
       <div className="mb-8">
         <h2 className="text-3xl font-bold text-slate-100">Research History</h2>
@@ -97,6 +104,7 @@ export const ResearchHistory: React.FC = () => {
           {/* Search */}
           <div className="flex-1">
             <input
+              aria-label="Search queries"
               type="text"
               placeholder="Search queries..."
               value={searchTerm}
@@ -144,6 +152,12 @@ export const ResearchHistory: React.FC = () => {
         </div>
       </div>
 
+      {loadError && (
+        <p role="alert" className="mb-4 rounded-lg border border-red-500 bg-red-50 p-4 text-sm text-red-800">
+          Could not load research history. Check the backend connection and select Refresh to try again.
+        </p>
+      )}
+
       {/* Results Count */}
       <div className="mb-4 text-slate-400 text-sm">
         Showing {filteredHistory.length} of {history.length} queries
@@ -151,7 +165,7 @@ export const ResearchHistory: React.FC = () => {
 
       {/* History List */}
       <div className="space-y-4">
-        {filteredHistory.length === 0 ? (
+        {filteredHistory.length === 0 && !loadError ? (
           <div className="bg-slate-900 border border-slate-800 rounded-lg p-12 text-center">
             <p className="text-slate-400">
               {searchTerm || filterStatus !== 'all'
@@ -165,7 +179,7 @@ export const ResearchHistory: React.FC = () => {
               key={item.id}
               className="bg-slate-900 border border-slate-800 rounded-lg p-6 hover:border-slate-700 transition-colors"
             >
-              <div className="flex items-start justify-between mb-3">
+              <div className="flex flex-col sm:flex-row gap-4 items-start justify-between mb-3">
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-slate-200 mb-2">
                     {truncateText(item.query, 150)}
@@ -194,7 +208,7 @@ export const ResearchHistory: React.FC = () => {
                     {/* Execution Time */}
                     {item.execution_time && (
                       <span className="text-xs text-slate-500">
-                        ⏱️ {formatDuration(item.execution_time)}
+                        {formatDuration(item.execution_time)}
                       </span>
                     )}
 
@@ -248,9 +262,10 @@ export const ResearchHistory: React.FC = () => {
               </div>
               <button
                 onClick={() => setSelectedReport(null)}
+                aria-label="Close report"
                 className="p-2 hover:bg-slate-800 rounded-lg text-slate-400"
               >
-                ✕
+                <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2"><path d="m5 5 10 10M15 5 5 15" /></svg>
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-8">

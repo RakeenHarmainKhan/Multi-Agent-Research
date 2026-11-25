@@ -245,9 +245,9 @@ class TestRunIsolationWithinAThread:
             system = str(prompt_messages[0].content)
             if "Break down the research query" in system:
                 return llm_response(json.dumps({"steps": [{"query": "w", "type": "web"}]}))
-            if "research summary" in system:
+            if "Cite sources inline" in system:
                 return llm_response("Fact [1].")
-            if "ONLY respond to queries related to Artificial Intelligence" in system:
+            if "You route questions" in system:
                 return llm_response(
                     json.dumps(
                         {"intent": "CHAT", "requires_academic": False, "requires_web": False, "reasoning": "r"}

@@ -26,7 +26,7 @@ class ResearchState(TypedDict, total=False):
     guardrails: Dict[str, Any]  # {"blocked": bool, "reasons": [...], "redactions": [...]}
 
     # Classification outputs
-    intent: Literal["CHAT", "RESEARCH", "REJECTED", "BLOCKED"]
+    intent: Literal["CHAT", "LOOKUP", "RESEARCH", "BLOCKED"]
     requires_academic: bool
     requires_web: bool
     
@@ -36,6 +36,10 @@ class ResearchState(TypedDict, total=False):
     # Research results
     web_results: List[Dict[str, Any]]
     academic_results: List[Dict[str, Any]]
+    search_diagnostics: List[Dict[str, Any]]
+    extraction_diagnostics: List[Dict[str, Any]]
+    stage_timings: Dict[str, float]
+    stage_retries: Dict[str, Dict[str, Any]]
     all_sources: List[Dict[str, Any]]
     
     # Final outputs

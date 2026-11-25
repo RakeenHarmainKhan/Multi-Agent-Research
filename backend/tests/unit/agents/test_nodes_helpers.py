@@ -26,14 +26,42 @@ class TestConversationContext:
         assert out == "No previous conversation context provided."
 
 
-class TestRateLimitDetection:
+class TestRetryableErrorDetection:
     @pytest.mark.parametrize("msg", ["Error 429", "Rate limit exceeded", "rate-limited"])
     def test_detected(self, msg):
-        assert nodes._is_rate_limited_error(Exception(msg)) is True
+        assert nodes._is_retryable_llm_error(Exception(msg)) is True
+
+    def test_dropped_connection_detected(self):
+        assert nodes._is_retryable_llm_error(nodes.APIConnectionError(request=None)) is True
 
     @pytest.mark.parametrize("msg", ["invalid api key", "HTTP 404: DeploymentNotFound"])
     def test_other_errors_not_detected(self, msg):
-        assert nodes._is_rate_limited_error(Exception(msg)) is False
+        assert nodes._is_retryable_llm_error(Exception(msg)) is False
+
+
+def test_llm_client_is_reused(monkeypatch):
+    nodes._cached_llm.cache_clear()
+    created = []
+    monkeypatch.setattr(type(nodes.settings), "missing_llm_settings", lambda self: [])
+    monkeypatch.setattr(nodes, "AzureChatOpenAI", lambda **kwargs: created.append(kwargs) or object())
+    try:
+        assert nodes._build_llm() is nodes._build_llm()
+        assert len(created) == 1
+    finally:
+        nodes._cached_llm.cache_clear()
+
+
+def test_llm_retries_are_attributed_to_the_current_stage(monkeypatch):
+    from app.agents.workflow import _timed_node
+
+    monkeypatch.setattr(nodes._invoke_with_retry.retry, "sleep", lambda _s: None)
+    monkeypatch.setattr(nodes._invoke_with_retry.retry, "wait", lambda _state: 2)
+    llm = _FlakyLLM([Exception("429")])
+    node = _timed_node("writer", lambda state: {"answer": nodes._invoke_with_retry(llm, [])})
+    result = node({})
+    assert result["answer"] == "ok"
+    assert result["stage_retries"]["writer"] == {"retry_count": 1, "retry_wait_seconds": 2}
+    assert nodes.llm_retry_metrics.get() is None
 
 
 class _FlakyLLM:
@@ -59,11 +87,16 @@ class TestInvokeWithRetry:
         assert nodes._invoke_with_retry(llm, []) == "ok"
         assert llm.calls == 2
 
-    def test_gives_up_after_three_attempts_and_reraises(self, no_sleep):
-        llm = _FlakyLLM([Exception("429")] * 5)
+    def test_retries_dropped_connection_then_succeeds(self, no_sleep):
+        llm = _FlakyLLM([nodes.APIConnectionError(request=None)])
+        assert nodes._invoke_with_retry(llm, []) == "ok"
+        assert llm.calls == 2
+
+    def test_gives_up_after_five_attempts_and_reraises(self, no_sleep):
+        llm = _FlakyLLM([Exception("429")] * 6)
         with pytest.raises(Exception, match="429"):
             nodes._invoke_with_retry(llm, [])
-        assert llm.calls == 3
+        assert llm.calls == 5
 
     def test_404_fails_fast_without_retrying(self, no_sleep):
         """A 404 (e.g. wrong deployment name) won't fix itself, so don't wait and retry."""

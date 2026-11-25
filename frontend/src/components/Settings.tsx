@@ -18,7 +18,7 @@ export const Settings: React.FC = () => {
   }, []);
 
   return (
-    <div className="h-full overflow-y-auto bg-slate-950 p-8">
+    <div className="h-full overflow-y-auto bg-slate-950 p-4 sm:p-8">
       {/* Header */}
       <div className="mb-8">
         <h2 className="text-3xl font-bold text-slate-100">Settings</h2>

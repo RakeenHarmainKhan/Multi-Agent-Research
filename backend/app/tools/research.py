@@ -4,32 +4,56 @@ Implements web search, academic search, and citation extraction.
 """
 import logging
 import re
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from langchain_community.utilities import ArxivAPIWrapper
-from langchain_core.tools import tool
 from langchain_tavily import TavilySearch
+from tavily import TavilyClient
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_random_exponential
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+_TRANSIENT_ERROR_NAMES = {"ConnectionError", "ConnectTimeout", "ReadTimeout", "Timeout", "RemoteProtocolError"}
+
+
+def is_transient_search_error(exc: BaseException) -> bool:
+    """Network blips, rate limits (429) and server errors (500/502/503/504) are worth retrying; bad input or config is not."""
+    if isinstance(exc, (ConnectionError, TimeoutError)) or type(exc).__name__ in _TRANSIENT_ERROR_NAMES:
+        return True
+    message = str(exc).lower()
+    return any(marker in message for marker in ("429", "rate limit", "http 500", "502", "503", "504"))
+
+
+search_retry = retry(
+    stop=stop_after_attempt(5),
+    # jitter stops retries from many runs landing together and hitting the rate limit again
+    wait=wait_random_exponential(multiplier=3, min=3, max=30),
+    retry=retry_if_exception(is_transient_search_error),
+    reraise=True,
+)
+
+
+# Academic search is Tavily restricted to scholarly sites: journals, preprint servers and paper indexes across fields.
+ACADEMIC_DOMAINS = [
+    "arxiv.org", "biorxiv.org", "medrxiv.org", "ssrn.com", "nber.org",
+    "pubmed.ncbi.nlm.nih.gov", "ncbi.nlm.nih.gov", "semanticscholar.org", "openreview.net", "aclanthology.org",
+    "nature.com", "science.org", "cell.com", "thelancet.com", "nejm.org", "bmj.com", "jamanetwork.com",
+    "plos.org", "frontiersin.org", "pnas.org", "sciencedirect.com", "link.springer.com",
+    "onlinelibrary.wiley.com", "tandfonline.com", "academic.oup.com", "cambridge.org", "journals.sagepub.com",
+    "jstor.org", "dl.acm.org", "ieeexplore.ieee.org", "iopscience.iop.org",
+]
+
+
+class WebSearchUnavailableError(RuntimeError):
+    """Web search is not configured or could not be initialized."""
+
 
 class _MockSearchTool:
-    """Fallback search tool that keeps the workflow functional without a Tavily key."""
+    """Unavailable search tool; do not treat a configuration message as a source."""
 
     def invoke(self, query: str) -> List[Dict[str, Any]]:
-        return [
-            {
-                "title": "Search API not configured",
-                "url": "",
-                "content": (
-                    "Web search is currently running in fallback mode because no "
-                    "TAVILY_API_KEY is configured. "
-                    f"Original query: {query}"
-                ),
-            }
-        ]
+        raise WebSearchUnavailableError("Web search is unavailable")
 
 
 class ResearchToolkit:
@@ -38,10 +62,10 @@ class ResearchToolkit:
     def __init__(self):
         self.tavily_available = bool(settings.TAVILY_API_KEY)
 
-    def get_web_search_tool(self):
-        """Return the Tavily web search tool, or a mock when no key is configured."""
+    def get_web_search_tool(self, include_domains: Optional[List[str]] = None):
+        """Return the Tavily search tool (optionally limited to some sites), or a mock when no key is configured."""
         if not self.tavily_available:
-            logger.warning("No web search API configured, using mock data")
+            logger.warning("No web search API configured")
             return _MockSearchTool()
         try:
             return TavilySearch(
@@ -49,37 +73,44 @@ class ResearchToolkit:
                 max_results=3,
                 search_depth="basic",
                 include_raw_content=False,
-                include_answer=True,
+                include_answer=False,
+                include_domains=include_domains,
                 exclude_domains=["facebook.com", "instagram.com", "twitter.com", "youtube.com", "tiktok.com"],
             )
-        except Exception:
-            logger.info("Tavily search API key missing or invalid, using mock fallback.")
+        except Exception as exc:
+            logger.error("Could not initialize Tavily search (%s)", type(exc).__name__)
             return _MockSearchTool()
 
+    def get_academic_search_tool(self):
+        """Tavily search limited to scholarly sites, so academic search shares web search's API and filtering."""
+        return self.get_web_search_tool(include_domains=ACADEMIC_DOMAINS)
 
-@tool
-def academic_search(query: str, max_results: int = 3) -> str:
-    """
-    Search academic databases (Arxiv) for peer-reviewed papers.
 
-    Args:
-        query: Scientific query string
-        max_results: Maximum number of papers to return
-
-    Returns:
-        Formatted string with paper titles, abstracts, and URLs
-    """
+def extract_passage(url: str, query: str) -> str | None:
+    """Ask Tavily for one query-relevant passage from an already retrieved page."""
+    if not settings.TAVILY_API_KEY:
+        raise WebSearchUnavailableError("Web extraction is unavailable")
+    client = TavilyClient(api_key=settings.TAVILY_API_KEY)
     try:
-        arxiv = ArxivAPIWrapper(
-            top_k_results=max_results,
-            doc_content_chars_max=2000,
-            load_max_docs=3,
-            sort_by="relevance",
-        )
-        return arxiv.run(query)
-    except Exception as e:
-        logger.error("Academic search failed: %s", e)
-        return f"Academic search unavailable: {e}"
+        response = client.extract(urls=[url], query=query, chunks_per_source=1, timeout=10)
+    finally:
+        client.session.close()
+    if not isinstance(response, dict):
+        raise ValueError("Invalid extraction response")
+    results = response.get("results")
+    if not isinstance(results, list):
+        raise ValueError("Invalid extraction response")
+    if not results:
+        if response.get("failed_results"):
+            raise ValueError("Page extraction failed")
+        return None
+    result = results[0]
+    if not isinstance(result, dict) or not isinstance(result.get("url"), str) or result["url"].rstrip("/") != url.rstrip("/"):
+        raise ValueError("Extraction response URL does not match the requested page")
+    content = result.get("raw_content")
+    if not isinstance(content, str):
+        raise ValueError("Invalid extracted content")
+    return content.strip() or None
 
 
 def number_sources(

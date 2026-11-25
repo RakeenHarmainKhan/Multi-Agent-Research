@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ResearchHistory } from '../../src/components/ResearchHistory';
 import { apiService } from '../../src/services/api';
@@ -46,5 +47,15 @@ describe('ResearchHistory', () => {
     render(<ResearchHistory />);
     await screen.findByText('question 1');
     expect(screen.queryByRole('button', { name: 'Load More' })).not.toBeInTheDocument();
+  });
+
+  it('shows a failure instead of an empty history and retries on refresh', async () => {
+    getQueryHistory.mockRejectedValueOnce(new Error('offline'));
+    render(<ResearchHistory />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not load research history');
+    expect(screen.queryByText(/No research history yet/)).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Refresh' }));
+    expect(await screen.findByText('question 1')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
