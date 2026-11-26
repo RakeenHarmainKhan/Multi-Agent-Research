@@ -28,11 +28,31 @@ describe('ApiService', () => {
     expect(created.config?.timeout).toBe(300000);
   });
 
-  it('executeResearch posts the request and returns the data', async () => {
-    client.post.mockResolvedValue({ data: { thread_id: 't', report: 'r' } });
-    const out = await apiService.executeResearch({ query: 'q', mode: 'research' });
-    expect(client.post).toHaveBeenCalledWith('/research', { query: 'q', mode: 'research' });
+  it('executeResearch streams stages and resolves with the result event', async () => {
+    const body =
+      'event: stage\ndata: {"stage": "input_guard"}\n\n' +
+      'event: stage\ndata: {"stage": "writer"}\n\n' +
+      'event: result\ndata: {"thread_id": "t", "report": "r"}\n\n';
+    const fetchMock = vi.fn().mockResolvedValue(new Response(body));
+    vi.stubGlobal('fetch', fetchMock);
+    const stages: string[] = [];
+
+    const out = await apiService.executeResearch({ query: 'q', mode: 'research' }, (s) => stages.push(s));
+
+    expect(fetchMock.mock.calls[0][0]).toMatch(/\/api\/v1\/research\/stream$/);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ query: 'q', mode: 'research' });
+    expect(stages).toEqual(['input_guard', 'writer']);
     expect(out).toEqual({ thread_id: 't', report: 'r' });
+  });
+
+  it('executeResearch rejects with the server detail on an error event', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('event: error\ndata: {"detail": "boom"}\n\n')));
+    await expect(apiService.executeResearch({ query: 'q' })).rejects.toThrow('boom');
+  });
+
+  it('executeResearch rejects on a non-ok status', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 422 })));
+    await expect(apiService.executeResearch({ query: 'q' })).rejects.toThrow('422');
   });
 
   it('getResearchResult fetches by thread id', async () => {

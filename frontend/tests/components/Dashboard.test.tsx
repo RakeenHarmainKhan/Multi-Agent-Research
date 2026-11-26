@@ -52,7 +52,7 @@ describe('Dashboard', () => {
   it('does not show a cost card', async () => {
     getSystemStats.mockResolvedValue({ ...STATS, total_cost: 1.5 });
     render(<Dashboard />);
-    await screen.findByText('Tokens Used');
+    await screen.findByText('Tokens used');
     expect(screen.queryByText('Est. Cost')).not.toBeInTheDocument();
     expect(screen.queryByText('$1.50')).not.toBeInTheDocument();
   });
@@ -72,7 +72,7 @@ describe('Dashboard', () => {
 
   it('does not show the removed fake metrics', async () => {
     render(<Dashboard />);
-    await screen.findByText('Tokens Used');
+    await screen.findByText('Tokens used');
     expect(screen.queryByText(/active users/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Database')).not.toBeInTheDocument();
   });

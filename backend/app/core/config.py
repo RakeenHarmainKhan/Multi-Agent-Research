@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     # Workflow behavior
     HISTORY_LIMIT: int = 100
 
+    # Optional metadata-only tracing
+    LANGFUSE_ENABLED: bool = False
+    LANGFUSE_PUBLIC_KEY: str = ""
+    LANGFUSE_SECRET_KEY: str = ""
+    LANGFUSE_BASE_URL: str = "https://cloud.langfuse.com"
+
     model_config = SettingsConfigDict(
         env_file=str(ENV_FILE),
         env_file_encoding="utf-8",

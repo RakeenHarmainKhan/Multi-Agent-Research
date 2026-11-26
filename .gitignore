@@ -111,4 +111,10 @@ backend/evals/results/*.md
 backend/evals/results/*.txt
 
 PROJECT.md
-PRODUCT.md/PROJECT.md
+PRODUCT.md
+DESIGN.md
+.github/agents/
+.github/hooks/
+.github/skills/
+.impeccable/
+       

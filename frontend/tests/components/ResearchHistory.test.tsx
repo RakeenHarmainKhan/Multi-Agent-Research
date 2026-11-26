@@ -39,7 +39,9 @@ describe('ResearchHistory', () => {
     await screen.findByText('question 1');
     const options = screen.getAllByRole('option').map((o) => o.textContent);
     expect(options).not.toContain('Processing');
-    expect(options).toEqual(expect.arrayContaining(['All Status', 'Completed', 'Failed']));
+    expect(options).toEqual(expect.arrayContaining(['All statuses', 'Completed', 'Failed']));
+    expect(screen.getAllByText('Research')).toHaveLength(2);
+    expect(screen.queryByText('RESEARCH')).not.toBeInTheDocument();
   });
 
   it('has no Load More button that does nothing', async () => {

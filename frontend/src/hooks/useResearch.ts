@@ -16,6 +16,8 @@ interface UseResearchReturn {
   citations: Citation[];
   /** Kinds of personal data masked in the latest question, e.g. ['email'] */
   redactions: string[];
+  /** Name of the agent currently working on the question, while loading. */
+  stage: string | null;
   executeResearch: (query: string, mode?: ResearchMode) => Promise<void>;
   /** Re-run the last question, replacing its answer. */
   regenerate: (mode?: ResearchMode) => Promise<void>;
@@ -29,6 +31,7 @@ export const useResearch = (): UseResearchReturn => {
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
   const [citations, setCitations] = useState<Citation[]>([]);
   const [redactions, setRedactions] = useState<string[]>([]);
+  const [stage, setStage] = useState<string | null>(null);
 
   const appendAssistant = useCallback((content: string, answerCitations: Citation[] = []) => {
     setMessages((prev) => [...prev, { role: 'assistant', content, timestamp: new Date(), citations: answerCitations }]);
@@ -48,7 +51,7 @@ export const useResearch = (): UseResearchReturn => {
         messages: history.slice(-HISTORY_TO_SEND).map(({ role, content }) => ({ role, content })),
       };
 
-      const response = await apiService.executeResearch(request);
+      const response = await apiService.executeResearch(request, setStage);
 
       // Store thread ID for conversation continuity
       setCurrentThreadId(response.thread_id);
@@ -61,6 +64,7 @@ export const useResearch = (): UseResearchReturn => {
       appendAssistant(`Error: ${errorMessage}. Please try again.`);
     } finally {
       setIsLoading(false);
+      setStage(null);
     }
   }, [currentThreadId, appendAssistant]);
 
@@ -92,6 +96,7 @@ export const useResearch = (): UseResearchReturn => {
     currentThreadId,
     citations,
     redactions,
+    stage,
     executeResearch,
     regenerate,
     clearMessages,

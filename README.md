@@ -80,6 +80,7 @@ Input Guard → Intent Classifier → Planner → Researcher → Writer → Outp
 - **LOOKUP**: one recent or checkable fact → one web search with a self-contained query, skips the planner; if an LLM review finds the answer incomplete, it tries one query-ranked passage from an accepted page, then at most one follow-up search if needed. These extra calls add latency and cost and do not guarantee a correct or current answer.
 - **RESEARCH**: comparisons, multi-part, surveys, evidence-based or contested topics (health, law, finance, science) → full pipeline
 - If the answer may have changed since training, or a wrong answer is costly, it never picks CHAT
+- Also judges safety in every mode: Web Research mode forces RESEARCH but still runs this check, because the input rules alone catch only 5 of the 15 harmful guardrail cases
 - Respects guardrail verdicts (blocked → cannot proceed)
 
 **3. Planner** (Strategy)
@@ -215,6 +216,8 @@ Results are reported per domain and per question type, plus an **equal-weight av
 This set measures harmful-request blocking and false positives on benign queries. It contains 13 hard negatives and 2 plain benign cases, with no borderline cases.
 
 **Result (earlier 43-case set)**: 19/19 harmful blocked, 0/20 false positives. This historical result is not directly comparable to the current 30-case set.
+
+**CI gate (offline)**: `TestGuardrailDatasetGate` in `backend/tests/integration/test_workflow_graph.py` replays this set on every push, with a fake LLM and no API keys. Every harmful case must reach the safety check and be refused, in both Automatic and Web Research mode. No benign case may be blocked by the input rules. It does not measure the real model's judgment; the live eval does.
 
 #### 2. Routing (30 cases)
 **Goal**: Send each query down the cheapest path that still answers it correctly.
@@ -426,6 +429,8 @@ uvicorn main:app --reload
 # → http://localhost:8000
 ```
 
+`POST /api/v1/research` returns the finished answer. `POST /api/v1/research/stream` takes the same body and returns server-sent events: a `stage` event (`{"stage": "planner"}`) as each agent starts, then one `result` event with the same JSON as `/research`, or an `error` event (`{"detail": ...}`). The chat UI uses the stream to show which agent is working.
+
 ---
 
 ## Limitations & Future Work
@@ -552,6 +557,25 @@ pip install -e .
 uvicorn main:app --reload
 ```
 *Copy `backend/.env.example` to `backend/.env` and fill in your own `AZURE_OPENAI_*` values (endpoint, key, deployment, API version) and `TAVILY_API_KEY`.*
+
+#### Optional Langfuse tracing
+
+Tracing is disabled by default. To enable it, add your Langfuse project credentials to `backend/.env` and restart the backend:
+
+```dotenv
+LANGFUSE_ENABLED=true
+LANGFUSE_PUBLIC_KEY=<your-public-key>
+LANGFUSE_SECRET_KEY=<your-secret-key>
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
+```
+
+Use the base URL for your Langfuse region or self-hosted instance. The Python v5 SDK requires a Langfuse v4 backend.
+
+Each `/research` execution creates a trace with spans for the agents it runs: input guard, classifier, chat, planner, researcher and writer. Each LLM attempt is a child generation with native input, output and total token usage. Agent and run metadata contain their token totals and latency; agent metadata also includes LLM retries and scheduled retry wait. Totals are recorded on generations only for Langfuse's usage aggregation, so parent metadata does not double-count tokens.
+
+Raised and handled failures record only the exception type. The `intent_classifier` span records `status` as `blocked` (the question was refused), `accepted` (the classifier checked it and judged it safe) or `unchecked` (classification failed and the run continued without a safety judgment). A recovered child failure marks its parent as a warning. Queries, conversation history, answers, source content, URLs, thread IDs and raw exception messages are not sent. Agent names, routing intent and model deployment name are sent. This does not change existing local application logs.
+
+Missing credentials fail startup when tracing is enabled. Tracing SDK failures are logged without interrupting research. Spans are exported in the background and flushed on shutdown. Token counts reflect provider-reported usage only: non-LLM agents show zero, and missing usage or failed attempts do not provide a reliable billing count (`usage_reported=false` identifies successful responses without usage).
 
 ### 2. Frontend Setup
 ```powershell

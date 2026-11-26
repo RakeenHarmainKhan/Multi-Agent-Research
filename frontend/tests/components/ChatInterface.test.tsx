@@ -25,7 +25,7 @@ const RESPONSE = {
 
 const send = async (text: string) => {
   const user = userEvent.setup();
-  await user.type(screen.getByPlaceholderText(/Ask a research question/), text);
+  await user.type(screen.getByPlaceholderText('Ask a question'), text);
   await user.click(screen.getByRole('button', { name: 'Send' }));
   return user;
 };
@@ -43,7 +43,7 @@ describe('mode dropdown', () => {
   it('offers Auto and Web Research', () => {
     render(<ChatInterface />);
     const options = screen.getAllByRole('option').map((o) => o.textContent);
-    expect(options).toEqual(['Auto (Classify)', 'Web Research']);
+    expect(options).toEqual(['Automatic', 'Web research']);
   });
 
   it('sends mode "auto" by default', async () => {
@@ -57,7 +57,7 @@ describe('mode dropdown', () => {
     render(<ChatInterface />);
     const user = userEvent.setup();
     await user.selectOptions(screen.getByRole('combobox'), 'research');
-    await user.type(screen.getByPlaceholderText(/Ask a research question/), 'what is lora');
+    await user.type(screen.getByPlaceholderText('Ask a question'), 'what is lora');
     await user.click(screen.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(executeResearch).toHaveBeenCalled());
     expect(executeResearch.mock.calls[0][0]).toMatchObject({ mode: 'research' });
@@ -69,7 +69,7 @@ describe('sending', () => {
     render(<ChatInterface />);
     const button = screen.getByRole('button', { name: 'Send' });
     expect(button).toBeDisabled();
-    await userEvent.setup().type(screen.getByPlaceholderText(/Ask a research question/), 'hi');
+    await userEvent.setup().type(screen.getByPlaceholderText('Ask a question'), 'hi');
     expect(button).toBeEnabled();
   });
 
@@ -102,19 +102,32 @@ describe('sending', () => {
     executeResearch.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
     render(<ChatInterface />);
     await send('what is lora');
-    expect(await screen.findByText('Working on it...')).toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent('Preparing a response');
     finish(RESPONSE);
     await screen.findByText(/LoRA adds low-rank updates/);
-    expect(screen.queryByText('Working on it...')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('names the agent that is working as stages stream in', async () => {
+    let finish: (value: typeof RESPONSE) => void = () => {};
+    executeResearch.mockImplementationOnce((_request, onStage) => {
+      onStage?.('researcher');
+      return new Promise((resolve) => { finish = resolve; });
+    });
+    render(<ChatInterface />);
+    await send('what is lora');
+    expect(await screen.findByRole('status')).toHaveTextContent('Searching sources');
+    finish(RESPONSE);
+    await screen.findByText(/LoRA adds low-rank updates/);
   });
 
   it('clears the conversation', async () => {
     render(<ChatInterface />);
     const user = await send('what is lora');
     await screen.findByText(/LoRA adds low-rank updates/);
-    await user.click(screen.getByRole('button', { name: 'Clear Chat' }));
+    await user.click(screen.getByRole('button', { name: 'Clear chat' }));
     expect(screen.queryByText(/LoRA adds low-rank updates/)).not.toBeInTheDocument();
-    expect(screen.getByText('What would you like to explore?')).toBeInTheDocument();
+    expect(screen.getByText('Ask MARA a question')).toBeInTheDocument();
   });
 });
 

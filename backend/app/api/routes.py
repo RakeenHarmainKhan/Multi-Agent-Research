@@ -1,11 +1,13 @@
 """API routes for research execution and lightweight admin data."""
 from datetime import datetime, timezone
+import json
 import logging
 import time
 import uuid
 from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 
 from app.agents.workflow import research_graph
 from app.api.models import HealthCheck, ResearchRequest, ResearchResponse, SystemStats
@@ -13,6 +15,7 @@ from app.core.config import settings
 from app.core.runtime_store import runtime_store
 from app.core.usage import TokenUsageHandler
 from app.guardrails import redact_pii
+from app.observability.tracing import trace_span
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -57,6 +60,31 @@ def _to_response(record: Dict[str, Any]) -> ResearchResponse:
 @router.post("/research", response_model=ResearchResponse)
 async def execute_research(request: ResearchRequest):
     """Execute the research workflow."""
+    try:
+        async for _, response in _research_events(request):
+            pass
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return response
+
+
+@router.post("/research/stream")
+async def stream_research(request: ResearchRequest):
+    """Same as POST /research, as server-sent events: a `stage` event as each agent starts, then `result` or `error`."""
+
+    async def events():
+        try:
+            async for kind, value in _research_events(request):
+                data = value.model_dump_json() if kind == "result" else json.dumps({"stage": value})
+                yield f"event: {kind}\ndata: {data}\n\n"
+        except Exception as exc:
+            yield f"event: error\ndata: {json.dumps({'detail': str(exc)})}\n\n"
+
+    return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+
+
+async def _research_events(request: ResearchRequest):
+    """Run the workflow, yielding ("stage", node name) as each agent starts and finally ("result", response)."""
     thread_id = request.thread_id or str(uuid.uuid4())
     run_id = str(uuid.uuid4())
     start_time = time.time()
@@ -78,7 +106,19 @@ async def execute_research(request: ResearchRequest):
         }
 
         logger.info("Starting research for thread %s", thread_id)
-        final_state = await research_graph.ainvoke(inputs, config=config)
+        with trace_span("research") as metadata:
+            try:
+                final_state = {}
+                async for mode, chunk in research_graph.astream(inputs, config=config, stream_mode=["tasks", "values"]):
+                    if mode == "values":
+                        final_state = chunk
+                    elif "input" in chunk:  # task start event (finish events carry "result")
+                        yield "stage", chunk["name"]
+                metadata["intent"] = final_state.get("intent", "UNKNOWN")
+                metadata["outcome"] = "blocked" if final_state.get("guardrails", {}).get("blocked") else "completed"
+            finally:
+                usage = usage_handler.summary()
+                metadata.update(input_tokens=usage["input_tokens"], output_tokens=usage["output_tokens"])
         execution_time = time.time() - start_time
         usage = usage_handler.summary()
 
@@ -102,7 +142,7 @@ async def execute_research(request: ResearchRequest):
             "Run %s finished in %.1fs, tokens in/out %s/%s",
             run_id, execution_time, usage["input_tokens"], usage["output_tokens"],
         )
-        return _to_response(record)
+        yield "result", _to_response(record)
     except Exception as exc:
         logger.error("Research failed: %s", exc, exc_info=True)
         runtime_store.save_result(
@@ -120,7 +160,7 @@ async def execute_research(request: ResearchRequest):
                 **usage_handler.summary(),
             }
         )
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise
 
 
 @router.get("/research/{thread_id}", response_model=ResearchResponse)

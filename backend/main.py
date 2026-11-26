@@ -7,6 +7,7 @@ import logging
 
 from app.core.config import cors_options, settings
 from app.api.routes import router
+from app.observability.tracing import start_tracing, stop_tracing
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,10 +20,12 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifecycle manager."""
     logger.info("Starting MARA Research Platform...")
-
-    yield
-
-    logger.info("Shutting down MARA...")
+    start_tracing()
+    try:
+        yield
+    finally:
+        stop_tracing()
+        logger.info("Shutting down MARA...")
 
 
 app = FastAPI(

@@ -65,234 +65,214 @@ export const ResearchHistory: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
-        return 'bg-green-500/20 text-green-800 border-green-500/50';
+        return 'border-green-500/30 bg-green-500/10 text-green-800';
       case 'failed':
-        return 'bg-red-500/20 text-red-800 border-red-500/50';
+        return 'border-red-500/30 bg-red-500/10 text-red-800';
       default:
-        return 'bg-slate-500/20 text-slate-400 border-slate-500/50';
+        return 'border-slate-700 text-slate-500';
     }
   };
 
-  const getIntentBadge = (intent: string) =>
-    intent === 'CHAT'
-      ? 'bg-purple-500/20 text-purple-800'
-      : intent === 'LOOKUP'
-        ? 'bg-emerald-500/20 text-emerald-800'
-        : 'bg-blue-500/20 text-blue-400';
+  const formatLabel = (value: string) =>
+    value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-slate-400">Loading history...</div>
+        <div className="text-slate-500">Loading history</div>
       </div>
     );
   }
 
   return (
     <div className="h-full overflow-y-auto bg-slate-950 p-4 sm:p-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold text-slate-100">Research History</h2>
-        <p className="text-slate-400 mt-2">
-          Browse recent queries stored in the current backend session
-        </p>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-slate-900 border border-slate-800 rounded-lg p-4 mb-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          {/* Search */}
-          <div className="flex-1">
-            <input
-              aria-label="Search queries"
-              type="text"
-              placeholder="Search queries..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
-            />
-          </div>
-
-          {/* Status Filter */}
-          <div>
-            <select
-              title="Status Filter"
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-slate-200 focus:outline-none focus:border-blue-500"
-            >
-              <option value="all">All Status</option>
-              <option value="completed">Completed</option>
-              <option value="failed">Failed</option>
-            </select>
-          </div>
-
-          {/* Sort Filter */}
-          <div>
-            <select
-              title="Sort Order"
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value)}
-              className="bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-slate-200 focus:outline-none focus:border-blue-500"
-            >
-              <option value="recent">Recent First</option>
-              <option value="oldest">Oldest First</option>
-              <option value="fastest">Fastest</option>
-              <option value="slowest">Slowest</option>
-            </select>
-          </div>
-
-          {/* Refresh Button */}
-          <button
-            onClick={loadHistory}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors"
-          >
-            Refresh
-          </button>
+      <div className="mx-auto w-full max-w-screen-2xl">
+        <div className="mb-8">
+          <h2 className="text-2xl font-medium text-slate-100 sm:text-3xl">Research history</h2>
+          <p className="mt-2 text-slate-500">
+            Review past questions, outcomes, and reports
+          </p>
         </div>
-      </div>
 
-      {loadError && (
-        <p role="alert" className="mb-4 rounded-lg border border-red-500 bg-red-50 p-4 text-sm text-red-800">
-          Could not load research history. Check the backend connection and select Refresh to try again.
-        </p>
-      )}
+        <div className="mb-6 border-b border-slate-700 pb-6">
+          <div className="flex flex-col gap-3 md:flex-row">
+            <div className="flex-1">
+              <input
+                aria-label="Search queries"
+                type="text"
+                placeholder="Search"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-slate-200 placeholder-slate-500 focus:border-blue-500 focus:outline-none"
+              />
+            </div>
 
-      {/* Results Count */}
-      <div className="mb-4 text-slate-400 text-sm">
-        Showing {filteredHistory.length} of {history.length} queries
-      </div>
+            <div>
+              <select
+                title="Status filter"
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-slate-200 focus:border-blue-500 focus:outline-none md:w-auto"
+              >
+                <option value="all">All statuses</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed</option>
+              </select>
+            </div>
 
-      {/* History List */}
-      <div className="space-y-4">
-        {filteredHistory.length === 0 && !loadError ? (
-          <div className="bg-slate-900 border border-slate-800 rounded-lg p-12 text-center">
-            <p className="text-slate-400">
-              {searchTerm || filterStatus !== 'all'
-                ? 'No queries match your filters'
-                : 'No research history yet. Start a conversation!'}
-            </p>
-          </div>
-        ) : (
-          filteredHistory.map((item) => (
-            <div
-              key={item.id}
-              className="bg-slate-900 border border-slate-800 rounded-lg p-6 hover:border-slate-700 transition-colors"
+            <div>
+              <select
+                title="Sort order"
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-slate-200 focus:border-blue-500 focus:outline-none md:w-auto"
+              >
+                <option value="recent">Recent first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="fastest">Fastest</option>
+                <option value="slowest">Slowest</option>
+              </select>
+            </div>
+
+            <button
+              onClick={loadHistory}
+              className="rounded-lg bg-blue-600 px-5 py-2 text-white transition-colors hover:bg-blue-300"
             >
-              <div className="flex flex-col sm:flex-row gap-4 items-start justify-between mb-3">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-slate-200 mb-2">
-                    {truncateText(item.query, 150)}
-                  </h3>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    {/* Status Badge */}
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-semibold border ${getStatusColor(
-                        item.status
-                      )}`}
-                    >
-                      {item.status}
-                    </span>
+              Refresh
+            </button>
+          </div>
+        </div>
 
-                    {/* Intent Badge */}
-                    {item.intent && (
+        {loadError && (
+          <p role="alert" className="mb-4 rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800">
+            Could not load research history. Check the backend connection and select Refresh to try again.
+          </p>
+        )}
+
+        <p className="mb-4 text-sm text-slate-500">
+          Showing {filteredHistory.length} of {history.length} queries
+        </p>
+
+        <div className="divide-y divide-slate-700 border-y border-slate-700">
+          {filteredHistory.length === 0 && !loadError ? (
+            <div className="py-12 text-center">
+              <p className="text-slate-500">
+                {searchTerm || filterStatus !== 'all'
+                  ? 'No queries match your filters'
+                  : 'No research history yet'}
+              </p>
+            </div>
+          ) : (
+            filteredHistory.map((item) => (
+              <div key={item.id} className="py-5">
+                <div className="mb-3 flex flex-col items-start justify-between gap-4 sm:flex-row">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="mb-2 break-words text-base font-medium text-slate-200">
+                      {truncateText(item.query, 150)}
+                    </h3>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                       <span
-                        className={`px-3 py-1 rounded-full text-xs font-semibold ${getIntentBadge(
-                          item.intent
+                        className={`rounded-md border px-2 py-1 text-xs font-medium ${getStatusColor(
+                          item.status
                         )}`}
                       >
-                        {item.intent}
+                        {formatLabel(item.status)}
                       </span>
-                    )}
 
-                    {/* Execution Time */}
-                    {item.execution_time && (
+                      {item.intent && (
+                        <span className="rounded-md border border-slate-700 px-2 py-1 text-xs font-medium text-slate-500">
+                          {formatLabel(item.intent)}
+                        </span>
+                      )}
+
+                      {item.execution_time && (
+                        <span className="text-xs tabular-nums text-slate-500">
+                          {formatDuration(item.execution_time)}
+                        </span>
+                      )}
+
                       <span className="text-xs text-slate-500">
-                        {formatDuration(item.execution_time)}
+                        ID: {item.thread_id.substring(0, 12)}...
                       </span>
-                    )}
-
-                    {/* Thread ID */}
-                    <span className="text-xs text-slate-600">
-                      ID: {item.thread_id.substring(0, 12)}...
-                    </span>
+                    </div>
                   </div>
+
+                  <button
+                    onClick={async () => {
+                      setLoading(true);
+                      try {
+                        const result = await apiService.getRun(item.run_id);
+                        setSelectedReport({
+                          ...item,
+                          report: result.report
+                        });
+                      } catch (err) {
+                        console.error("Failed to load report", err);
+                        alert("Failed to load report content");
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-800"
+                  >
+                    View report
+                  </button>
                 </div>
 
-                {/* View Button */}
+                <div className="text-xs tabular-nums text-slate-500">
+                  {formatDate(item.created_at)}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {selectedReport && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4">
+            <div className="flex max-h-[90vh] w-full max-w-5xl flex-col rounded-xl border border-slate-700 bg-slate-900 shadow-lg">
+              <div className="flex items-center justify-between gap-4 border-b border-slate-700 p-4 sm:p-6">
+                <div className="min-w-0">
+                  <h2 className="text-lg font-medium text-slate-100 sm:text-xl">Research report</h2>
+                  <p className="mt-1 line-clamp-2 break-words text-sm text-slate-500">
+                    {selectedReport.query}
+                  </p>
+                </div>
                 <button
-                  onClick={async () => {
-                    setLoading(true);
-                    try {
-                      const result = await apiService.getRun(item.run_id);
-                      setSelectedReport({
-                        ...item,
-                        report: result.report
-                      });
-                    } catch (err) {
-                      console.error("Failed to load report", err);
-                      alert("Failed to load report content");
-                    } finally {
-                      setLoading(false);
-                    }
-                  }}
-                  className="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 text-sm transition-colors"
+                  onClick={() => setSelectedReport(null)}
+                  aria-label="Close report"
+                  className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-800"
                 >
-                  View Report
+                  <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="m5 5 10 10M15 5 5 15" />
+                  </svg>
                 </button>
               </div>
-
-              {/* Timestamp */}
-              <div className="text-xs text-slate-500">
-                Created: {formatDate(item.created_at)}
+              <div className="flex-1 overflow-y-auto p-4 sm:p-8">
+                <MarkdownRenderer content={selectedReport.report || "No content found for this report."} />
               </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Report Modal */}
-      {selectedReport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-5xl max-h-[90vh] flex flex-col shadow-2xl">
-            <div className="p-6 border-b border-slate-800 flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-bold text-slate-100">Research Report</h2>
-                <p className="text-sm text-slate-500 mt-1">{selectedReport.query}</p>
+              <div className="flex flex-wrap justify-end gap-3 border-t border-slate-700 p-4 sm:p-6">
+                <button
+                  onClick={() => {
+                    if (selectedReport.report) {
+                      navigator.clipboard.writeText(selectedReport.report);
+                      alert("Copied to clipboard");
+                    }
+                  }}
+                  className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-800"
+                >
+                  Copy content
+                </button>
+                <button
+                  onClick={() => setSelectedReport(null)}
+                  className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-300"
+                >
+                  Close
+                </button>
               </div>
-              <button
-                onClick={() => setSelectedReport(null)}
-                aria-label="Close report"
-                className="p-2 hover:bg-slate-800 rounded-lg text-slate-400"
-              >
-                <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2"><path d="m5 5 10 10M15 5 5 15" /></svg>
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-8">
-              <MarkdownRenderer content={selectedReport.report || "No content found for this report."} />
-            </div>
-            <div className="p-6 border-t border-slate-800 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  if (selectedReport.report) {
-                    navigator.clipboard.writeText(selectedReport.report);
-                    alert("Copied to clipboard");
-                  }
-                }}
-                className="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg hover:bg-slate-700 text-sm"
-              >
-                Copy Content
-              </button>
-              <button
-                onClick={() => setSelectedReport(null)}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 text-sm font-semibold"
-              >
-                Close
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

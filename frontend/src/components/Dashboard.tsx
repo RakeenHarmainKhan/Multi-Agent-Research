@@ -32,7 +32,7 @@ export const Dashboard: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-slate-400">Loading dashboard...</div>
+        <div className="text-slate-500">Loading dashboard</div>
       </div>
     );
   }
@@ -40,7 +40,7 @@ export const Dashboard: React.FC = () => {
   if (!stats) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-slate-400">Failed to load statistics</div>
+        <div className="text-slate-500">Could not load statistics</div>
       </div>
     );
   }
@@ -51,82 +51,80 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="h-full overflow-y-auto bg-slate-950 p-4 sm:p-8">
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold text-slate-100">System Analytics</h2>
-        <p className="text-slate-400 mt-2">
-          Runtime metrics for the current backend instance
-        </p>
-      </div>
-
-      {/* Metric Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <MetricCard
-          title="Total Queries"
-          value={stats.total_queries.toString()}
-          subtitle={`${stats.queries_today} today`}
-        />
-        <MetricCard
-          title="Success Rate"
-          value={`${successRate}%`}
-          subtitle={`${stats.failed_queries} failed · ${stats.blocked_queries} blocked`}
-        />
-        <MetricCard
-          title="Avg Latency"
-          value={formatDuration(stats.avg_latency)}
-          subtitle="Per completed query"
-        />
-        <MetricCard
-          title="Tokens Used"
-          value={stats.total_tokens.toLocaleString('en-US')}
-          subtitle={`${Math.round(stats.avg_tokens_per_query).toLocaleString('en-US')} per query`}
-        />
-      </div>
-
-      {/* System Health */}
-      <div className="mt-8 bg-slate-900 border border-slate-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold text-slate-200 mb-4">
-          System Health
-        </h3>
-        <div className="space-y-3">
-          <HealthIndicator
-            label="API Server"
-            status={health ? 'healthy' : 'down'}
-            text={health ? `Operational · v${health.version}` : 'Unreachable'}
-          />
-          <HealthIndicator
-            label="LLM Service"
-            status={health?.llm_service === 'configured' ? 'healthy' : 'down'}
-            text={health?.llm_service === 'configured' ? 'Configured' : 'Not configured'}
-          />
-          <HealthIndicator
-            label="Storage"
-            status="degraded"
-            text={`${health?.database ?? 'unknown'} (resets on restart)`}
-          />
+      <div className="mx-auto w-full max-w-screen-2xl">
+        <div className="mb-8">
+          <h2 className="text-2xl font-medium text-slate-100 sm:text-3xl">System analytics</h2>
+          <p className="mt-2 text-slate-500">
+            Runtime metrics for the current backend instance
+          </p>
         </div>
+
+        <dl className="grid grid-cols-2 gap-4 rounded-lg border border-slate-700 bg-slate-900 p-4 sm:grid-cols-4 sm:gap-0 sm:p-2">
+          <Metric
+            title="Total queries"
+            value={stats.total_queries.toLocaleString('en-US')}
+            subtitle={`${stats.queries_today.toLocaleString('en-US')} today`}
+          />
+          <Metric
+            title="Success rate"
+            value={`${successRate}%`}
+            subtitle={`${stats.failed_queries} failed · ${stats.blocked_queries} blocked`}
+          />
+          <Metric
+            title="Average latency"
+            value={formatDuration(stats.avg_latency)}
+            subtitle="Per completed query"
+          />
+          <Metric
+            title="Tokens used"
+            value={stats.total_tokens.toLocaleString('en-US')}
+            subtitle={`${Math.round(stats.avg_tokens_per_query).toLocaleString('en-US')} per query`}
+          />
+        </dl>
+
+        <section className="mt-8">
+          <h3 className="mb-3 text-lg font-medium text-slate-200">System health</h3>
+          <dl className="divide-y divide-slate-700 border-y border-slate-700">
+            <HealthIndicator
+              label="API server"
+              status={health ? 'healthy' : 'down'}
+              text={health ? `Operational · v${health.version}` : 'Unreachable'}
+            />
+            <HealthIndicator
+              label="LLM service"
+              status={health?.llm_service === 'configured' ? 'healthy' : 'down'}
+              text={health?.llm_service === 'configured' ? 'Configured' : 'Not configured'}
+            />
+            <HealthIndicator
+              label="Storage"
+              status="degraded"
+              text={`${health?.database ?? 'unknown'} (resets on restart)`}
+            />
+          </dl>
+        </section>
       </div>
     </div>
   );
 };
 
-interface MetricCardProps {
+interface MetricProps {
   title: string;
   value: string;
   subtitle: string;
 }
 
-const MetricCard: React.FC<MetricCardProps> = ({
+const Metric: React.FC<MetricProps> = ({
   title,
   value,
   subtitle,
 }) => {
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-lg p-6">
-      <h3 className="text-slate-400 text-sm mb-2">{title}</h3>
-      <p className="text-3xl font-semibold text-slate-100">
+    <div className="min-w-0 px-2 py-3 sm:px-4 sm:py-4">
+      <dt className="text-sm font-medium text-slate-500">{title}</dt>
+      <dd className="mt-2 break-words text-2xl font-medium tabular-nums text-slate-100 sm:text-3xl">
         {value}
-      </p>
-      <p className="text-slate-500 text-xs mt-2">{subtitle}</p>
+      </dd>
+      <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
     </div>
   );
 };
@@ -149,12 +147,12 @@ const HealthIndicator: React.FC<HealthIndicatorProps> = ({
   };
 
   return (
-    <div className="flex items-center justify-between p-3 bg-slate-800 rounded-lg">
-      <span className="text-slate-300">{label}</span>
-      <div className="flex items-center gap-2">
-        <div className={`w-2 h-2 rounded-full ${statusColor[status]}`} />
-        <span className="text-sm text-slate-400">{text}</span>
-      </div>
+    <div className="flex flex-col gap-1 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <dt className="text-slate-300">{label}</dt>
+      <dd className="flex items-center gap-2 text-sm text-slate-500">
+        <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${statusColor[status]}`} />
+        {text}
+      </dd>
     </div>
   );
 };

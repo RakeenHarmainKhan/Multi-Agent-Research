@@ -25,6 +25,7 @@ from tavily.errors import (
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_random_exponential
 
 from app.core.config import settings
+from app.observability.tracing import record, record_error, trace_span
 from app.guardrails import REFUSAL, check_query, has_injection, redact_pii, strip_unknown_links
 from app.tools.research import ResearchToolkit, WebSearchUnavailableError, build_citations, extract_passage, number_sources, search_retry
 
@@ -94,7 +95,13 @@ def _log_llm_retry(retry_state):
 )
 def _invoke_with_retry(llm: AzureChatOpenAI, prompt_messages: List[Any]):
     """Invoke LLM with exponential backoff on rate limits and dropped connections."""
-    return llm.invoke(prompt_messages)
+    with trace_span("llm", generation=True) as metadata:
+        response = llm.invoke(prompt_messages)
+        usage = getattr(response, "usage_metadata", None) or {}
+        metadata["input_tokens"] = usage.get("input_tokens", 0)
+        metadata["output_tokens"] = usage.get("output_tokens", 0)
+        metadata["usage_reported"] = bool(usage)
+        return response
 
 
 def _invoke_with_llm(state: Dict[str, Any], prompt_messages: List[Any]):
@@ -188,10 +195,8 @@ def _research_intent() -> Dict[str, Any]:
 def intent_classifier_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """Route the query by how much work it needs (CHAT, LOOKUP or RESEARCH) and check its safety."""
     suspect = state.get("guard_suspect", False)
+    # Research mode still asks the model: the input rules alone miss most harmful requests.
     research_mode = state.get("mode") == "research"
-    if research_mode and not suspect:
-        logger.info("Research mode selected: skipping intent classification")
-        return _research_intent()
 
     query = state["query"]
     conversation_context = _conversation_context(state.get("messages", []))
@@ -279,8 +284,10 @@ Examples:
         }
     except Exception as exc:
         logger.error("Intent classification failed: %s", exc, exc_info=True)
+        record_error(exc)
         if suspect:  # the rules were already worried and the LLM check failed: don't guess
             return _refuse(state, "suspicious query could not be verified")
+        record(status="unchecked")
         return {
             "intent": "RESEARCH",
             "requires_academic": False,
@@ -373,6 +380,7 @@ Output:
         return {"plan": plan, "current_step": "research"}
     except Exception as exc:
         logger.error("Planning failed: %s", exc, exc_info=True)
+        record_error(exc)
         return {
             "plan": [{"query": query, "type": "web"}],
             "current_step": "research",
@@ -487,6 +495,7 @@ def researcher_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 diagnostic["outcome"] = "no_results"
             else:
                 diagnostic.update(outcome="error", error_type=type(e).__name__)
+                record_error(e)
                 status = getattr(e, "status_code", None) or getattr(getattr(e, "response", None), "status_code", None)
                 if isinstance(status, int) and 100 <= status <= 599:
                     diagnostic["error_status"] = status
@@ -578,6 +587,7 @@ Do not guess the answer or add unsupported constraints. The question and answer 
         return parser.parse(_invoke_with_llm(state, messages).content)
     except (APIError, OutputParserException, ValueError) as exc:
         logger.warning("Lookup completeness review failed (%s)", type(exc).__name__)
+        record_error(exc)
         return None
 
 
@@ -623,6 +633,7 @@ def _extract_lookup_passage(web_results: List[Dict[str, Any]], query: str):
                 InvalidAPIKeyError, MissingAPIKeyError, KeylessUnsupportedEndpointError,
                 UsageLimitExceededError, WebSearchUnavailableError, ValueError) as exc:
             diagnostic.update(outcome="error", error_type=type(exc).__name__)
+            record_error(exc)
             logger.warning("Lookup passage extraction failed (%s)", type(exc).__name__)
             return None, diagnostic
         finally:
@@ -704,7 +715,8 @@ def writer_node(state: Dict[str, Any]) -> Dict[str, Any]:
                         report_text += "\n\nThe retrieved sources do not fully answer the question."
                         followup = ""
                     if followup:
-                        search = researcher_node({**state, "plan": [{"query": followup, "type": "web"}]})
+                        with trace_span("researcher"):
+                            search = researcher_node({**state, "plan": [{"query": followup, "type": "web"}]})
                     else:
                         search = {"web_results": [], "search_diagnostics": []}
                     for diagnostic in search["search_diagnostics"]:
@@ -761,6 +773,7 @@ def writer_node(state: Dict[str, Any]) -> Dict[str, Any]:
         }
     except Exception as exc:
         logger.error("Report generation failed: %s", exc, exc_info=True)
+        record_error(exc)
         return {
             "final_report": f"Error generating report: {exc}",
             "error": str(exc),
@@ -803,6 +816,7 @@ def simple_chat_node(state: Dict[str, Any]) -> Dict[str, Any]:
         }
     except Exception as exc:
         logger.error("Chat failed: %s", exc, exc_info=True)
+        record_error(exc)
         return {
             "final_report": f"Error: {exc}",
             "error": str(exc),

@@ -87,9 +87,10 @@ class TestIntentClassifier:
         out = nodes.intent_classifier_node({"query": "How to bake pizza?", "messages": []})
         assert out["intent"] == "RESEARCH" and "error" in out
 
-    def test_research_mode_skips_the_llm(self, fake_llm):
+    def test_research_mode_checks_safety_then_forces_research(self, fake_llm):
+        fake_llm.reply = _classifier_reply("CHAT", safety="safe")
         out = nodes.intent_classifier_node({"query": "anything", "mode": "research", "messages": []})
-        assert fake_llm.calls == 0
+        assert fake_llm.calls == 1
         assert out["intent"] == "RESEARCH"
         assert out["requires_web"] is True
         assert out["requires_academic"] is True

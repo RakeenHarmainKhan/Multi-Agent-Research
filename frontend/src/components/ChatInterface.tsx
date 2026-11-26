@@ -9,6 +9,16 @@ import { MarkdownRenderer } from './MarkdownRenderer';
 import { downloadTextFile } from '../utils/helpers';
 import type { ResearchMode } from '../types';
 
+// What each backend agent is doing, shown while the answer is on its way.
+const STAGE_LABELS: Record<string, string> = {
+  input_guard: 'Checking the question',
+  intent_classifier: 'Deciding how much research it needs',
+  simple_chat: 'Writing the answer',
+  planner: 'Planning searches',
+  researcher: 'Searching sources',
+  writer: 'Writing the cited answer',
+};
+
 export const ChatInterface: React.FC = () => {
   const [input, setInput] = useState('');
   const [mode, setMode] = useState<ResearchMode>('auto');
@@ -21,6 +31,7 @@ export const ChatInterface: React.FC = () => {
     regenerate,
     clearMessages,
     redactions,
+    stage,
   } = useResearch();
 
   // Auto-scroll to bottom on new messages
@@ -47,9 +58,9 @@ export const ChatInterface: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between gap-4 px-5 py-4 md:px-8 border-b border-slate-800">
         <div>
-          <h2 className="text-base font-semibold">Research Assistant</h2>
+          <h2 className="text-base font-medium">Research assistant</h2>
           <p className="text-sm text-slate-500">
-            Ask anything: quick answers, cited facts or full research reports
+            Direct answers, cited lookups, and multi-source reports
           </p>
         </div>
         <div className="flex gap-2">
@@ -57,7 +68,7 @@ export const ChatInterface: React.FC = () => {
             onClick={clearMessages}
             className="px-3 py-2 border border-slate-700 text-slate-300 rounded-lg hover:bg-slate-800 text-sm whitespace-nowrap"
           >
-            Clear Chat
+            Clear chat
           </button>
         </div>
       </div>
@@ -67,11 +78,11 @@ export const ChatInterface: React.FC = () => {
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center min-h-full text-center">
             <div className="max-w-lg">
-              <h3 className="font-display text-3xl font-semibold tracking-tight mb-4 text-slate-200">
-                What would you like to explore?
+              <h3 className="font-display mb-4 text-2xl font-medium text-slate-200 sm:text-3xl">
+                Ask MARA a question
               </h3>
-              <p className="text-slate-400 mb-8">
-                Ask a question for a direct answer, a cited fact, or a research report.
+              <p className="mb-8 text-slate-500">
+                Get a direct answer, a cited lookup, or a research report.
               </p>
             </div>
           </div>
@@ -87,7 +98,7 @@ export const ChatInterface: React.FC = () => {
                 >
                   <div
                     className={`max-w-4xl ${message.role === 'user'
-                      ? 'bg-blue-600 text-white'
+                      ? 'border border-slate-700 bg-slate-800 text-slate-100'
                       : 'bg-slate-900 border border-slate-800'
                       } rounded-2xl p-5`}
                   >
@@ -111,15 +122,17 @@ export const ChatInterface: React.FC = () => {
                         {(message.citations?.length ?? 0) > 0 && (
                           <div className="mt-6 border-t border-slate-800 pt-4">
                             <details className="group">
-                              <summary className="text-xs font-semibold text-slate-500 cursor-pointer hover:text-slate-300 transition-colors uppercase tracking-wider flex items-center gap-2">
-                                <svg aria-hidden="true" className="h-3 w-3 group-open:rotate-90 transition-transform" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 3 5 5-5 5" /></svg>
+                              <summary className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-500 transition-colors hover:text-slate-300">
+                                <svg aria-hidden="true" className="h-4 w-4 transition-transform group-open:rotate-90" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                  <path d="m6 3 5 5-5 5" />
+                                </svg>
                                 Sources ({message.citations?.length})
                               </summary>
-                              <div className="mt-4 grid grid-cols-1 gap-3">
+                              <div className="mt-4 divide-y divide-slate-700 border-y border-slate-700">
                                 {message.citations?.map((cite) => (
-                                  <div key={cite.id} id={`cite-${idx}-${cite.id}`} className="p-3 bg-slate-950/50 rounded border border-slate-800 text-xs">
-                                    <p className="text-slate-300 break-all">
-                                      <span className="text-blue-400 font-semibold mr-1">[{cite.id}]</span>
+                                  <div key={cite.id} id={`cite-${idx}-${cite.id}`} className="py-3 text-sm">
+                                    <p className="break-all text-slate-300">
+                                      <span className="mr-1 font-medium text-blue-400">[{cite.id}]</span>
                                       {cite.url ? (
                                         <a href={cite.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
                                           {cite.title || cite.url}
@@ -128,8 +141,8 @@ export const ChatInterface: React.FC = () => {
                                         cite.title
                                       )}
                                     </p>
-                                    <p className="text-slate-500 mt-1 line-clamp-3">{cite.snippet}</p>
-                                    <p className="text-slate-600 mt-1 uppercase text-[10px]">{cite.type}</p>
+                                    <p className="mt-1 line-clamp-3 text-slate-500">{cite.snippet}</p>
+                                    <p className="mt-1 text-xs capitalize text-slate-500">{cite.type}</p>
                                   </div>
                                 ))}
                               </div>
@@ -169,29 +182,21 @@ export const ChatInterface: React.FC = () => {
 
             {/* Loading Indicator */}
             {isLoading && (
-              <div className="flex flex-col space-y-4">
-                <div className="flex items-center gap-3 p-5 bg-slate-900 rounded-lg border border-slate-800 max-w-md">
-                  <div className="flex space-x-2">
-                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
-                    <div
-                      className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
-                      style={{ animationDelay: '0.2s' }}
-                    ></div>
-                    <div
-                      className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
-                      style={{ animationDelay: '0.4s' }}
-                    ></div>
-                  </div>
-                  <span className="text-slate-400 text-sm">
-                    Working on it...
-                  </span>
-                </div>
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex max-w-md items-center gap-3 rounded-lg border border-slate-700 bg-slate-900 p-4"
+              >
+                <span aria-hidden="true" className="h-2 w-2 rounded-full bg-blue-400" />
+                <span className="text-sm text-slate-500">
+                  {(stage && STAGE_LABELS[stage]) || 'Preparing a response'}
+                </span>
               </div>
             )}
 
             {/* Error Display */}
             {error && (
-              <div className="p-4 bg-red-50 border border-red-500 rounded-lg text-red-800 text-sm">
+              <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-800">
                 {error}
               </div>
             )}
@@ -204,41 +209,41 @@ export const ChatInterface: React.FC = () => {
       {/* Input Area */}
       <div className="px-5 pb-5 pt-3 md:px-8 bg-slate-950">
         <div className="max-w-4xl mx-auto">
-        <div className="flex gap-3 mb-2">
-          <label className="flex items-center gap-2 text-xs text-slate-400">
-            Mode:
-            <select
-              value={mode}
-              onChange={(e) => setMode(e.target.value as ResearchMode)}
-              className="bg-slate-800 border border-slate-700 text-slate-200 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-500"
+          <div className="mb-2 flex gap-3">
+            <label className="flex items-center gap-2 text-xs text-slate-400">
+              Mode
+              <select
+                value={mode}
+                onChange={(e) => setMode(e.target.value as ResearchMode)}
+                className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none"
+              >
+                <option value="auto">Automatic</option>
+                <option value="research">Web research</option>
+              </select>
+            </label>
+          </div>
+          <div className="flex gap-3">
+            <textarea
+              aria-label="Research question"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyPress}
+              placeholder="Ask a question"
+              className="min-w-0 flex-1 resize-none rounded-xl border border-slate-700 bg-slate-900 p-4 text-slate-200 placeholder-slate-500 focus:border-blue-500"
+              rows={2}
+              disabled={isLoading}
+            />
+            <button
+              onClick={handleSend}
+              disabled={!input.trim() || isLoading}
+              className="rounded-xl bg-blue-600 px-5 font-medium text-white transition-colors hover:bg-blue-300 disabled:cursor-not-allowed disabled:opacity-50 md:px-7"
             >
-              <option value="auto">Auto (Classify)</option>
-              <option value="research">Web Research</option>
-            </select>
-          </label>
-        </div>
-        <div className="flex gap-3">
-          <textarea
-            aria-label="Research question"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyPress}
-            placeholder="Ask a research question on any topic... (Shift+Enter for new line)"
-            className="min-w-0 flex-1 bg-slate-900 border border-slate-700 rounded-xl p-4 text-slate-200 placeholder-slate-500 focus:border-blue-500 resize-none"
-            rows={2}
-            disabled={isLoading}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || isLoading}
-            className="px-5 md:px-7 bg-blue-600 text-white rounded-xl hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-colors"
-          >
-            Send
-          </button>
-        </div>
-        <p className="text-xs text-slate-500 mt-2">
-          Research queries may take a little longer to complete.
-        </p>
+              Send
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">
+            Enter to send · Shift+Enter for a new line · Research requests can take longer
+          </p>
         </div>
       </div>
     </div>

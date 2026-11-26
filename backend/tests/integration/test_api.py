@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -20,11 +22,12 @@ class FakeGraph:
         self.error = error
         self.inputs = None
 
-    async def ainvoke(self, inputs, config=None):
+    async def astream(self, inputs, config=None, stream_mode=None):
         self.inputs = inputs
+        yield "tasks", {"name": "input_guard", "input": inputs}
         if self.error:
             raise self.error
-        return self.state
+        yield "values", self.state
 
 
 @pytest.fixture
@@ -126,7 +129,32 @@ class TestResearchEndpoint:
         assert runtime_store.get_result("bad")["status"] == "failed"
 
 
-class TestResultRetrieval:
+def _sse(text):
+    """Parse an SSE body into (event, data) pairs."""
+    pairs = []
+    for block in text.strip().split("\n\n"):
+        lines = dict(line.split(": ", 1) for line in block.splitlines())
+        pairs.append((lines["event"], json.loads(lines["data"])))
+    return pairs
+
+
+class TestResearchStream:
+    def test_streams_stages_then_the_saved_result(self, client, graph):
+        r = client.post("/api/v1/research/stream", json={"query": "lora", "thread_id": "s1"})
+        assert r.headers["content-type"].startswith("text/event-stream")
+        events = _sse(r.text)
+        assert events[0] == ("stage", {"stage": "input_guard"})
+        assert events[-1][0] == "result" and events[-1][1]["report"] == "Report body [1]"
+        assert runtime_store.get_result("s1")["status"] == "completed"
+
+    def test_failure_ends_with_an_error_event_and_records_failed_run(self, client, monkeypatch):
+        monkeypatch.setattr(routes, "research_graph", FakeGraph(error=RuntimeError("boom")))
+        events = _sse(client.post("/api/v1/research/stream", json={"query": "q", "thread_id": "bad"}).text)
+        assert events[-1] == ("error", {"detail": "boom"})
+        assert runtime_store.get_result("bad")["status"] == "failed"
+
+    def test_invalid_request_is_rejected_before_streaming(self, client, graph):
+        assert client.post("/api/v1/research/stream", json={"query": ""}).status_code == 422
     def test_get_saved_result(self, client, graph):
         tid = client.post("/api/v1/research", json={"query": "q"}).json()["thread_id"]
         r = client.get(f"/api/v1/research/{tid}")
@@ -197,6 +225,7 @@ class TestUsageAccounting:
 
         replies = iter(
             [
+                reply(json.dumps({"intent": "RESEARCH", "safety": "safe", "reasoning": "r"}), 50, 10),  # classifier
                 reply(json.dumps({"steps": [{"query": "w", "type": "web"}]}), 100, 20),  # planner
                 reply("Fact [1].", 300, 80),  # writer
             ]
@@ -211,8 +240,14 @@ class TestUsageAccounting:
 
     def test_tokens_from_every_llm_call_are_summed(self, client, real_graph):
         body = client.post("/api/v1/research", json={"query": "q", "mode": "research"}).json()
-        assert body["input_tokens"] == 400
-        assert body["output_tokens"] == 100
+        assert body["input_tokens"] == 450
+        assert body["output_tokens"] == 110
+
+    def test_stream_reports_each_agent_in_order(self, client, real_graph):
+        events = _sse(client.post("/api/v1/research/stream", json={"query": "q", "mode": "research"}).text)
+        stages = [data["stage"] for kind, data in events if kind == "stage"]
+        assert stages == ["input_guard", "intent_classifier", "planner", "researcher", "writer"]
+        assert events[-1][0] == "result" and events[-1][1]["input_tokens"] == 450
 
     def test_cost_is_null_without_pricing(self, client, real_graph):
         body = client.post("/api/v1/research", json={"query": "q", "mode": "research"}).json()
@@ -223,12 +258,12 @@ class TestUsageAccounting:
         monkeypatch.setattr(routes.settings, "LLM_INPUT_COST_PER_1M_TOKENS", 2.0)
         monkeypatch.setattr(routes.settings, "LLM_OUTPUT_COST_PER_1M_TOKENS", 10.0)
         body = client.post("/api/v1/research", json={"query": "q", "mode": "research"}).json()
-        assert body["estimated_cost"] == pytest.approx(400 / 1e6 * 2 + 100 / 1e6 * 10)
+        assert body["estimated_cost"] == pytest.approx(450 / 1e6 * 2 + 110 / 1e6 * 10)
 
     def test_stats_report_real_tokens(self, client, real_graph):
         client.post("/api/v1/research", json={"query": "q", "mode": "research"})
         stats = client.get("/api/v1/admin/stats").json()
-        assert stats["total_tokens"] == 500
+        assert stats["total_tokens"] == 560
         assert "active_users" not in stats
 
 

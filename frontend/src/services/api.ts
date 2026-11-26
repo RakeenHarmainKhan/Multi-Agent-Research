@@ -35,9 +35,33 @@ class ApiService {
     );
   }
 
-  async executeResearch(request: ResearchRequest): Promise<ResearchResponse> {
-    const response = await this.client.post<ResearchResponse>('/research', request);
-    return response.data;
+  /** Runs the workflow over SSE; `onStage` receives each agent's name as it starts. */
+  async executeResearch(request: ResearchRequest, onStage?: (stage: string) => void): Promise<ResearchResponse> {
+    const response = await fetch(`${API_BASE_URL}/api/v1/research/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+      signal: AbortSignal.timeout(300000),
+    });
+    if (!response.ok || !response.body) throw new Error(`Request failed with status code ${response.status}`);
+
+    const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = '';
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += value;
+      const blocks = buffer.split('\n\n');
+      buffer = blocks.pop() ?? '';
+      for (const block of blocks) {
+        const event = block.match(/^event: (.*)$/m)?.[1];
+        const data = JSON.parse(block.match(/^data: (.*)$/m)?.[1] ?? 'null');
+        if (event === 'stage') onStage?.(data.stage);
+        else if (event === 'result') return data as ResearchResponse;
+        else if (event === 'error') throw new Error(data.detail);
+      }
+    }
+    throw new Error('The connection closed before the answer arrived');
   }
 
   async getResearchResult(threadId: string): Promise<ResearchResponse> {

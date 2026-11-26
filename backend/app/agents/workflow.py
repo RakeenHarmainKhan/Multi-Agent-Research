@@ -5,6 +5,7 @@ from functools import wraps
 
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.memory import MemorySaver
+from app.observability.tracing import trace_span
 from app.agents.state import ResearchState
 from app.agents.nodes import (
     input_guard_node,
@@ -26,7 +27,13 @@ def _timed_node(name, node):
         retry_metrics = {"retry_count": 0, "retry_wait_seconds": 0.0}
         token = llm_retry_metrics.set(retry_metrics)
         try:
-            result = node(state)
+            with trace_span(name) as metadata:
+                try:
+                    result = node(state)
+                finally:
+                    metadata.update(retry_metrics)
+                if name == "intent_classifier":
+                    metadata.setdefault("status", "blocked" if result.get("guardrails", {}).get("blocked") else "accepted")
         finally:
             llm_retry_metrics.reset(token)
             elapsed = time.perf_counter() - start

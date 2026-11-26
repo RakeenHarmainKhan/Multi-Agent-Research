@@ -16,7 +16,7 @@ export const Layout: React.FC<LayoutProps> = ({
   children,
 }) => {
   const tabs: Array<{ id: TabType; label: string }> = [
-    { id: 'chat', label: 'Research Chat' },
+    { id: 'chat', label: 'Research chat' },
     { id: 'history', label: 'History' },
     { id: 'dashboard', label: 'Analytics' },
     { id: 'settings', label: 'Settings' },
@@ -43,12 +43,20 @@ export const Layout: React.FC<LayoutProps> = ({
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
               aria-current={activeTab === tab.id ? 'page' : undefined}
-              className={`whitespace-nowrap md:w-full text-center md:text-left px-1 md:px-3 py-2.5 rounded-lg text-[11px] sm:text-sm transition-colors ${activeTab === tab.id
+              aria-label={tab.label}
+              className={`whitespace-nowrap md:w-full text-center md:text-left px-1 md:px-3 py-2 rounded-lg text-xs sm:text-sm transition-colors ${activeTab === tab.id
                   ? 'bg-slate-800 text-slate-100 font-semibold'
                   : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
                 }`}
             >
-              {tab.label}
+              {tab.id === 'chat' ? (
+                <>
+                  <span className="sm:hidden">Chat</span>
+                  <span className="hidden sm:inline">{tab.label}</span>
+                </>
+              ) : (
+                tab.label
+              )}
             </button>
           ))}
         </nav>
