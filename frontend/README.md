@@ -1,73 +1,43 @@
-# React + TypeScript + Vite
+# MARA Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+MARA's web interface is built with React, TypeScript and Vite.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Chat:** ask in Automatic or Web Research mode, follow agent progress, and view cited answers.
+- **Reports:** expand sources, copy or download answers, and regenerate a response.
+- **Dashboard:** view backend health, query counts, latency and token usage.
+- **History:** search and review runs stored by the current backend process.
+- **Settings:** view backend connection and configuration status. Model and search credentials stay on the backend.
 
-## React Compiler
+Run history resets when the backend restarts.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Local setup
 
-## Expanding the ESLint configuration
+Requires Node.js and npm; CI uses Node.js 22. Start the [backend](../backend/README.md) first, then from the repository root:
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```powershell
+cd frontend
+npm ci
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Open the address printed by Vite, normally `http://localhost:5173`. The frontend defaults to the API at `http://localhost:8000`. To use another backend address, set `VITE_API_URL` in `frontend/.env` using [`.env.example`](.env.example) as a guide, then restart Vite.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+If the frontend runs on a different port or hostname, add its exact browser origin to `BACKEND_CORS_ORIGINS` in the backend `.env` and restart the backend. Do not put backend API keys in the frontend environment file.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## API integration
+
+Chat sends questions to `POST /api/v1/research/stream`. It displays `stage` events while work is in progress, then renders the returned `result` or an error. Dashboard, history and settings read the API's admin and health endpoints.
+
+## Testing
+
+From `frontend`:
+
+```powershell
+npm test
+npm run build
+npm run lint
 ```
+
+The last recorded local run passed **89 frontend tests**, as well as build and lint checks.

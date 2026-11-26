@@ -2,17 +2,11 @@
 
 MARA is a high-performance, agentic research platform built on **LangGraph**, **FastAPI**, and **React**. It answers questions on any topic, spending effort where the answer needs it: a direct answer for stable knowledge, one cited web search for a single fact, and a planned, cited research report for complex questions.
 
-## 🎯 Project Status
+## Project Status
 
-**Round 2**: Evaluation-driven optimization complete (measured on the earlier AI/ML-only set, before the three-way router).
-- **Claim Accuracy (Strict "Yes")**: 46% → **81.2%** (+76% improvement)
-- **Hallucinations Reduced**: 54% → **18.8%** (−65%)
-- **Source Precision**: 72.4% → **82.6%** (+14%)
-- **Latency (p95)**: 166.9s → **43.2s** (−74%)
-- **Citation Coverage**: 100% (perfect)
-- **Evaluation Dataset (Round 2)**: 25 research questions on LLM/AI topics
+MARA uses **OpenAI GPT-5.1** with effort-based routing (CHAT / LOOKUP / RESEARCH), cited web research, safety checks, and Langfuse observability. Its evaluation dataset has 127 cases across four suites and ten domains. Results below are from the saved evaluation runs for those suites.
 
-**Now**: effort-based routing (CHAT / LOOKUP / RESEARCH) for any domain, and an eval set with 47 research questions across 8 domains (5 in history/society, 6 in each other domain); 20 lookups and 30 routing cases are spread evenly over 10 domains. Results are reported per domain, per question type and as an equal-weight average across domains.
+The frontend streams agent progress to the chat UI. CI runs backend and frontend checks and an offline guardrail regression gate.
 
 ---
 
@@ -23,8 +17,7 @@ MARA is a high-performance, agentic research platform built on **LangGraph**, **
 4. [Dataset & Test Cases](#dataset--test-cases)
 5. [Results & Metrics](#results--metrics)
 6. [How to Run](#how-to-run)
-7. [Limitations & Future Work](#limitations--future-work)
-8. [Tech Stack](#tech-stack)
+7. [Tech Stack](#tech-stack)
 
 ---
 
@@ -47,7 +40,7 @@ MARA orchestrates LLM agents to:
 ### Key Innovation: Evaluation-Driven Design
 Instead of guessing what makes "good research," we:
 - Built an **automated evaluation harness** (judge.py, metrics.py)
-- Defined **measurable metrics** (claim accuracy, hallucination rate, source precision)
+- Defined **measurable metrics** (claim support, unsupported details, source precision and answer relevance)
 - Iterated on **prompt rules** until metrics improved
 - Validated results with **human-defined test cases**
 
@@ -158,8 +151,8 @@ Run every time, no LLM calls. Fast, cheap, unambiguous.
 | **Source Stats** | Avg sources, unique domains, Tavily score bands | Detects if search strategy changed |
 | **Planner Fallbacks** | How many times plan was empty (fell back to query) | Flags planning failures |
 
-#### Layer 2: LLM Judge (3 Judges)
-LLM-powered but deterministic input. Measured on same dataset, same LLM version for reproducibility.
+#### Layer 2: LLM Judge
+LLM-powered semantic checks. Judge results can vary and are not a substitute for independent human validation.
 
 | Judge | Purpose | Input | Output |
 |-------|---------|-------|--------|
@@ -172,12 +165,12 @@ Compute rates and distributions from layer 2 results.
 
 | Metric | Calculation | Interpretation |
 |--------|-------------|---|
-| **Supported Yes** | % of claims with verdict `yes` | *The headline metric*. Higher = more faithful writing. 46% → 81.2% in round 2. |
-| **Supported or Partly** | % of claims with verdict `yes` or `partly` | Ceiling is ~96%. Low signal once high. |
-| **Adds Details** | % of claims marked `adds_details:true` | Hallucination rate. 54% → 18.8% in round 2 (−65%). |
-| **Source Precision** | % of sources marked `relevant:true` | Quality of search results. 72.4% → 82.6% in round 2. |
-| **Quote Verified** | % of judge quotes actually in source excerpts | Judge reliability check. Should be >75%. |
-| **Answer Fully Covered** | % of questions where all parts answered `yes` | Only ~84% (sample noise with n=25). |
+| **Supported Yes** | % of claims with verdict `yes` | Fully supported by supplied excerpts; 83.0% in the combined saved baseline. |
+| **Supported or Partly** | % of claims with verdict `yes` or `partly` | Distinguishes unsupported claims from claims with partial evidence. |
+| **Adds Details** | % of claims marked `adds_details:true` | Tracks claims that introduce details absent from the source excerpts. |
+| **Source Precision** | % of sources marked `relevant:true` | Relevance of returned search results; 96.2% research and 89.7% lookup in the saved baseline. |
+| **Quote Verified** | % of judge quotes actually in source excerpts | A check on whether the judge's quoted evidence appears in its input. |
+| **Answer Fully Relevant** | % of answers receiving `yes` across the judged question | 85.1% across the saved research and lookup results. |
 
 #### Why Three Layers?
 
@@ -215,8 +208,6 @@ Results are reported per domain and per question type, plus an **equal-weight av
 
 This set measures harmful-request blocking and false positives on benign queries. It contains 13 hard negatives and 2 plain benign cases, with no borderline cases.
 
-**Result (earlier 43-case set)**: 19/19 harmful blocked, 0/20 false positives. This historical result is not directly comparable to the current 30-case set.
-
 **CI gate (offline)**: `TestGuardrailDatasetGate` in `backend/tests/integration/test_workflow_graph.py` replays this set on every push, with a fake LLM and no API keys. Every harmful case must reach the safety check and be refused, in both Automatic and Web Research mode. No benign case may be blocked by the input rules. It does not measure the real model's judgment; the live eval does.
 
 #### 2. Routing (30 cases)
@@ -229,8 +220,6 @@ This set measures harmful-request blocking and false positives on benign queries
 | **RESEARCH** | 10 | "What does the evidence say about intermittent fasting for weight loss?", "Compare Rust and Go for building backend services" | Full search + synthesis |
 
 Each of the 10 domains (the 8 research domains plus sports_culture and everyday) has exactly one CHAT, one LOOKUP and one RESEARCH case, so the route can't be guessed from the topic. Metrics: accuracy, equal-weight accuracy across domains, **under-routed** (less work than needed, e.g. answering a current-events question from memory), **over-routed** (more work than needed: slower, not less correct), accuracy by domain.
-
-**Earlier result**: 29/30 (96.7%) on the old AI-only CHAT/RESEARCH/REJECTED labels; not comparable with this set.
 
 #### 3. Research Questions (47 cases)
 **Goal**: Measure research quality across domains. Each item is `{query, domain, type}`.
@@ -246,9 +235,7 @@ Each of the 10 domains (the 8 research domains plus sports_culture and everyday)
 | **law_policy** | 6 | EU AI Act, fair use, death penalty deterrence |
 | **climate_energy** | 6 | Carbon pricing, solar vs wind, grid-scale batteries |
 
-Each domain except history/society has all four question types: `explainer`, `comparison`, `multi_part`, `survey`. The India partition multi-part case was temporarily removed after repeated writer connection failures; revisit it later. Previous 48-case reports include that case and are not results for this 47-case set. The 19 other AI/ML questions from the Round 2 set were dropped to balance the domains (they are in git history).
-
-**Round 2 result (the old 25 AI/ML questions)**: 24/25 answered (latency p95 43s, sources 5.8 avg, domains 3.7 avg unique). Not comparable with this set.
+Each domain except history/society has all four question types: `explainer`, `comparison`, `multi_part`, `survey`.
 
 #### 4. Lookup Questions (20 cases)
 **Goal**: Test the LOOKUP path end-to-end. Two single-fact questions in each of the 10 routing domains, run in **auto** mode, so the report shows the route taken and the cited answer's quality.
@@ -258,88 +245,51 @@ Each domain except history/society has all four question types: `explainer`, `co
 1. **Manual review**: Author (Rakeen) reviewed all questions for clarity, scope, and balance
 2. **Diversity check**: Ensured no single subtopic dominates
 3. **Difficulty calibration**: Mixed easy (definition questions) and hard (nuanced comparisons)
-4. **Ground truth**: 25 AI research Q&A, used as the baseline for "what a good answer looks like"
+4. **Evaluation rubric**: each case has an expected route or guardrail outcome where applicable; answer quality is assessed for claim support, source relevance and answer relevance
 
 ---
 
 ## Results & Metrics
 
-### Round 1 Baseline (Initial Implementation)
+### Evaluation results
 
-| Metric | Value |
-|--------|-------|
-| Runs | 25 |
-| Success Rate | 100% |
-| Latency p50 | 27.0s |
-| Latency p95 | 166.9s |
-| Citation Coverage | 99.2% |
-| Fully Answered | 23/25 (92%) |
-| **Supported Yes (Strict)** | **46%** |
-| **Adds Unsupported Details** | **54%** |
-| Source Precision | 72.4% |
-| Planner Fallbacks | 0 |
+The evaluation dataset contains **127 cases** across guardrail, routing, research and lookup suites. Results come from separate saved suite runs dated November 24–25, 2026, rather than one combined run.
 
-**Problems identified:**
-- Only 46% of claims strictly supported (too many general statements without backing)
-- 54% of claims added details not in sources (hallucinations)
-- Some unanswered question parts (4/25 incomplete)
-- Latency spike (p95 166s vs p50 27s; tail heavy)
+| Metric | Result | What it measures |
+|---|---:|---|
+| Fully relevant answers | **85.1% (57/67)** | 38/47 research answers and 19/20 lookup answers judged fully relevant; “partly” is not counted as fully relevant |
+| Fully supported sampled claims | **83.0% (333/401)** | Claims judged supported by the supplied excerpts: 82.1% research (308/375) and 96.2% lookup (25/26) |
+| Source precision | **96.2% research; 89.7% lookup** | Returned sources judged relevant to the question |
+| Harmful requests blocked | **15/15 (100%)** | Saved guardrail outcomes across nine categories |
+| Benign requests wrongly blocked | **0/15 (0%)** | Saved guardrail outcomes |
+| Routing | **30/30 (100%)** | Expected CHAT, LOOKUP or RESEARCH route |
+| Median latency | **19.0 s research; 9.1 s lookup** | Measured |
+| p95 latency | **27.8 s research; 13.0 s lookup** | Measured |
 
-**Root cause analysis:**
-- Writer prompt encouraged "synthesis" (smooth transitions, general understanding)
-- Excerpt limit (500 chars) was too short to verify claims
-- Web score threshold (0.4) let off-topic sources through (~30% irrelevant)
-- One fact per sentence rule not enforced
+These are separate measures, not one overall accuracy score. Claim support is based on up to eight sampled cited claims per answer and checks support from the supplied excerpts; it does not independently establish truth or freshness. Source precision does not measure retrieval recall.
 
-### Round 2 Improvements (Evaluation-Driven Optimization)
+**Evaluation limitations:** the judge is an LLM and may misjudge relevance or support. Claim support checks the supplied excerpts, not independent truth or freshness. The research results cover 47 questions and lookup results cover 20; these are evaluation results, not production guarantees.
 
-**Code changes:**
-1. **Writer prompt**:
-   - Removed "synthesize smoothly" (was hiding unsupported details)
-   - Added "Do not add numbers, names, results from memory"
-   - Added "One fact per sentence, with 1–2 citations (not stacked)"
-   - Added "If multi-part, group Key Findings under one ### per part"
+### Evaluation-driven engineering
 
-2. **Excerpt length**: 500 → 1,000 characters
-   - Judge now sees full context, more likely to verify claims
-   - Input token cost +40% (trade-off accepted)
+- **Dataset:** 127 cases across 10 domains and four suites; reports break results down by domain and question type.
+- **CI gate:** replays the guardrail dataset offline with a fake LLM. Every harmful case must reach the safety check and be refused in both modes, and benign cases must not be blocked by input rules.
+- **Reliability checks:** 449 backend tests and 89 frontend tests passed locally; CI also runs frontend build and lint checks.
+- **Progress streaming:** server-sent events report workflow stages to the UI while a response is being generated.
 
-3. **Source filtering**: Score threshold 0.4 → 0.5
-   - Data-driven: Tavily scores <0.5 ~40% off-topic, 0.5–0.7 ~85% relevant
-   - Removes obvious noise upfront
+### Observability
 
-4. **arXiv parsing**: Strip Published/Authors lines
-   - Freed up 1/3 of abstract space for actual content
-   - Later removed when arXiv was replaced by site-limited Tavily search
+Optional **Langfuse** tracing records a trace per research request, spans for workflow agents, and child LLM generations. It captures latency, provider-reported input/output/total token usage, retries and error types; the intent-classifier span records `accepted`, `blocked` or `unchecked`. Query text, conversation history, answers, source content, URLs and thread IDs are excluded from Langfuse telemetry.
 
-5. **Evaluation parity**: Judge now reads same excerpts as writer
-   - `EXCERPT_CHARS` imported in evals/run.py
-   - Prevents "judge sees more than writer" discrepancy
+To enable tracing, set the Langfuse credentials described in the local setup section. Tracing is disabled by default.
 
-**Results:**
+### Evaluation reports
 
-| Metric | Round 1 | Round 2 | Change |
-|--------|---------|---------|--------|
-| Runs | 25 | 25 | — |
-| **Success Rate** | 100% | 96% | −4% (1 failure) |
-| Latency p50 | 27.0s | 24.9s | −8% |
-| **Latency p95** | **166.9s** | **43.2s** | **−74%** ✓ |
-| Citation Coverage | 99.2% | 100% | +0.8% ✓ |
-| Fully Answered | 92% | 84% | −8% (sample variance) |
-| **Supported Yes** | **46%** | **81.2%** | **+76%** ✓✓✓ |
-| **Adds Details** | **54%** | **18.8%** | **−65%** ✓✓✓ |
-| Source Precision | 72.4% | 82.6% | +14% ✓ |
-| Planner Fallbacks | 0 | 0 | — |
-| Avg Sources | 6.2 | 5.8 | −7% |
-| Avg Domains | 4.3 | 3.7 | −14% |
-
-**Headline**: Strict claim accuracy improved **76%** (46% → 81.2%), hallucinations reduced **65%** (54% → 18.8%), latency tail cut by **74%**.
-
-### Why Metrics Didn't Move on "Fully Answered"
-- Ceiling effect: "Yes or partly" was already 96%+, little room to improve
-- Sample variance: n=25; one question flipping changes 4% metric
-- Judge over-splits: Breaks questions into sub-parts; might mark a part "no" when it's briefly covered
-- Not human-validated: 12 judge labels still blank; judge accuracy unknown
+- [Consolidated baseline](backend/evals/results/baseline-20261125.md)
+- [Research results](backend/evals/results/research.md)
+- [Lookup results](backend/evals/results/lookup.md)
+- [Routing results](backend/evals/results/intent.md)
+- [Guardrail results](backend/evals/results/guardrails.md)
 
 ---
 
@@ -350,7 +300,7 @@ Each domain except history/society has all four question types: `explainer`, `co
 ```powershell
 # Clone & navigate
 git clone https://github.com/RakeenHarmainKhan/Multi-Agent-Research.git
-cd Multi-agent_research_assistant-main
+cd Multi-Agent-Research
 ```
 
 ### 2. Backend Setup
@@ -365,8 +315,7 @@ python -m venv ..\mara
 # Install
 pip install -e .
 
-# Configure .env (copy from .env.example, fill in keys)
-# Required: AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_KEY, AZURE_OPENAI_DEPLOYMENT, TAVILY_API_KEY
+# Copy .env.example to .env and configure model and search credentials
 ```
 
 ### 3. Run Evaluations
@@ -401,15 +350,7 @@ python -m evals.run --workers 4
 # Read the report
 cat evals/results/report.md
 
-# Compare two runs (before/after code change)
-python -I -c @'
-import json
-a = json.load(open("evals/results/report.json"))["research"]["summary"]
-b = json.load(open("evals/results/round2.json"))["research"]["summary"]
-for k in a:
-    if not isinstance(a[k], dict):
-        print(f"{k:40} {str(a[k]):>10} {str(b[k]):>10}")
-'@
+# The saved suite reports are linked in the Results & Metrics section.
 ```
 
 ### 5. Frontend Setup (Optional)
@@ -431,79 +372,24 @@ uvicorn main:app --reload
 
 `POST /api/v1/research` returns the finished answer. `POST /api/v1/research/stream` takes the same body and returns server-sent events: a `stage` event (`{"stage": "planner"}`) as each agent starts, then one `result` event with the same JSON as `/research`, or an `error` event (`{"detail": ...}`). The chat UI uses the stream to show which agent is working.
 
----
-
-## Limitations & Future Work
-
-### Current Limitations
-
-1. **Small Slices**
-   - 6 research questions per domain: per-domain numbers are noisy (one question is ~17% of a domain)
-   - Solution: Grow every domain by the same amount, so the set stays balanced
-
-2. **Judge Validation Is Limited**
-   - A deliberately mixed sample agreed with the judge on 12 of 19 definite labels; this is not a representative accuracy estimate
-   - Solution: Label a larger representative sample and compute judge agreement
-
-3. **Round 2 Numbers Are AI-Only**
-   - The headline metrics above came from 25 AI/ML questions and the old AI-only router
-   - The multi-domain set and the LOOKUP path have not been measured yet
-   - The 0.5 Tavily score threshold was tuned on AI questions; it may need per-domain tuning
-   - Solution: Rerun the evals and check `by_domain`, `domain_macro_avg` and `web_source_precision_by_tavily_score`
-
-4. **No User Feedback**
-   - Metrics don't measure user satisfaction (would you trust this answer?)
-   - Some metrics are proxies (e.g., "fully answered" ≠ "actually useful")
-   - Solution: Show 10 answers to actual users, collect feedback
-
-5. **Latency Tail Unexplained**
-   - p95 is good (43s), but we haven't root-caused why it was 166s before
-   - Might recur on new questions
-   - Solution: Profile latency per step (planner, researcher, writer)
-
-### Future Improvements (Roadmap)
-
-| Priority | Task | Expected Impact |
-|--|--|--|
-| **P0** | Label a representative sample | Validate judge accuracy |
-| **P0** | Verify-and-revise pass (extra LLM call to check facts) | Push strict "yes" to 85–90% |
-| **P1** | Rerun evals on the multi-domain set; tune `WEB_MIN_SCORE` per domain if needed | Real numbers outside AI |
-| **P1** | Add guardrail holdout set (harder paraphrases) | Test robustness of safety rules |
-| **P2** | Tracing (Langfuse/LangSmith) | Debug latency tail, monitor production |
-| **P2** | Grow per-domain slices to 10+ questions | Less noisy domain comparisons |
-| **P3** | User study (10 real users) | Measure satisfaction, find pain points |
-| **P3** | LLM-based fact-checking (compare sources to web) | Catch sources that themselves hallucinate |
-
-### Verify-and-Revise Pass (Next Big Lever)
-
-Concept: After the writer produces an answer, run a **verification pass**:
-1. For each sentence, extract the claimed fact
-2. Ask an LLM: "Does this quote from the source support this claim?"
-3. If not, either soften the claim or remove it
-
-**Expected benefit**: Catch remaining 19% of "adds_details" claims, pushing strict "yes" to 85%+.
-**Cost**: +1 LLM call per answer (~2–3s latency).
-**When**: After confirming round-2 metrics hold on a larger dataset.
-
----
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| **Backend LLM** | Azure OpenAI (gpt-5.1 deployment, 2023-05-15 API version) |
+| **Backend LLM** | OpenAI GPT-5.1 |
 | **Backend Framework** | FastAPI (async), Pydantic (validation) |
 | **Agent Orchestration** | LangGraph (StateGraph, MemorySaver checkpointer) |
 | **Search APIs** | Tavily (web, and academic via scholarly-site filter) |
 | **Retry Logic** | Tenacity (rate-limit aware; 404 no retry) |
-| **Frontend** | React 18, Vite, Tailwind CSS, TypeScript |
+| **Frontend** | React 19, Vite, Tailwind CSS, TypeScript |
 | **Markdown Rendering** | react-markdown v9, remark-gfm (tables), remark-math + rehype-katex (LaTeX) |
 | **Testing** | pytest (backend), Vitest (frontend) |
-| **Deployment** | Stateless; designed for Vercel (frontend) + Render/Azure (backend) |
+| **Deployment** | Stateless; frontend and backend can be deployed independently |
 
 ### Key Dependencies
 
-- `langchain-openai` (Azure connector)
+- `langchain-openai`
 - `langchain-tavily` (web and academic search)
 - `tenacity` (Retry with backoff)
 
@@ -540,12 +426,6 @@ MARA/
 └── img/                # Visual assets & demos
 ```
 
-## Tech Stack
-- **Backend**: Python 3.11+, FastAPI, LangGraph, LangChain, Pydantic.
-- **Frontend**: React 18, Vite, Tailwind CSS, TypeScript.
-- **Inference**: DeepSeek via OpenRouter.
-- **Search**: Tavily AI (web and scholarly sites).
-
 ## Quick Start (Local)
 
 ### 1. Backend Setup
@@ -556,7 +436,7 @@ python -m venv .venv
 pip install -e .
 uvicorn main:app --reload
 ```
-*Copy `backend/.env.example` to `backend/.env` and fill in your own `AZURE_OPENAI_*` values (endpoint, key, deployment, API version) and `TAVILY_API_KEY`.*
+*Copy `backend/.env.example` to `backend/.env` and configure the model and search credentials required by your setup.*
 
 #### Optional Langfuse tracing
 
